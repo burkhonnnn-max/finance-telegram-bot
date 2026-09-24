@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Muhit va xavfsizlik (Tokenlar bazaga chiqib ketmasligi uchun)
+.env
+.venv/
+venv/
+ENV/
+
+# Ma'lumotlar bazasi
+*.db
+*.sqlite3
+
+# Tizim fayllari
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
