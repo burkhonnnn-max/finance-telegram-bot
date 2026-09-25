@@ -238,25 +238,39 @@ async def process_voice_audio(audio_bytes: bytes) -> Dict[str, Any]:
 
     # 2. Bepul Speech Recognition + O'zbekcha parser (API kalitsiz ishlaydi!)
     try:
+        logger.info(f"Ovoz qabul qilindi ({len(audio_bytes)} bayt). WAV ga aylantirilmoqda...")
         wav_bytes = convert_ogg_to_wav(audio_bytes)
+        logger.info(f"WAV ga aylantirildi ({len(wav_bytes)} bayt). Google Speech Recognition ga yuborilmoqda...")
         transcript = transcribe_audio_free(wav_bytes)
 
         if not transcript:
+            logger.warning("Ovozdan hech qanday so'z tanib olinmadi.")
             return {
                 "success": False,
                 "error_type": "no_speech",
                 "message": "Ovoz aniq eshitilmadi yoki gapirilmadi."
             }
 
+        logger.info(f"Eshitilgan matn: '{transcript}'. Moliyaviy tahlil qilinmoqda...")
         parsed = parse_financial_intent(transcript)
+        logger.info(f"Tahlil natijasi: {parsed}")
         return {
             "success": True,
             "data": parsed
         }
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
+        logger.error(f"FFmpeg xatoligi: {err_msg}")
+        return {
+            "success": False,
+            "error_type": "processing_error",
+            "message": f"Audio xatolik: {err_msg}"
+        }
     except Exception as e:
-        logger.error(f"Ovozni bepul tahlil qilishda xatolik: {e}")
+        logger.error(f"Ovozni bepul tahlil qilishda xatolik: {e}", exc_info=True)
         return {
             "success": False,
             "error_type": "processing_error",
             "message": str(e)
         }
+

@@ -104,8 +104,9 @@ async def handle_voice_message(message: Message, state: FSMContext):
         await processing_msg.edit_text(response, parse_mode="HTML")
 
     except Exception as e:
-        logger.error(f"Voice handler exception: {e}")
+        logger.error(f"Voice handler exception: {e}", exc_info=True)
         await processing_msg.edit_text(
-            "⚠️ Ovozli xabarni qabul qilishda texnik xatolik yuz berdi.",
+            f"⚠️ Ovozli xabarni qabul qilishda xatolik yuz berdi:\n<code>{str(e)[:100]}</code>",
             parse_mode="HTML"
         )
+
