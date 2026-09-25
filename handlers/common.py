@@ -32,6 +32,19 @@ async def cmd_start(message: Message, state: FSMContext):
     await message.answer(welcome_text, reply_markup=get_main_keyboard(), parse_mode="HTML")
 
 
+@router.message(Command("restart"))
+async def cmd_restart(message: Message, state: FSMContext):
+    """Bot holatini tozalash va qayta ishga tushirish buyrug'i"""
+    await state.clear()
+    await message.answer(
+        "🔄 <b>Bot muvaffaqiyatli qayta ishga tushirildi!</b>\n\n"
+        "Barcha joriy amallar yangilandi va menyu qayta yuklandi. Marhamat, ishlashda davom etishingiz mumkin 👇",
+        reply_markup=get_main_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+
 @router.message(F.text == "ℹ️ Qanday ishlatiladi?")
 @router.message(Command("help"))
 async def cmd_help(message: Message):

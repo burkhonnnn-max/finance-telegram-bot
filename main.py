@@ -30,11 +30,13 @@ logger = logging.getLogger(__name__)
 
 async def set_bot_commands(bot: Bot):
     commands = [
-        BotCommand(command="start", description="Botni qayta ishga tushirish"),
+        BotCommand(command="start", description="Botni ishga tushirish"),
+        BotCommand(command="restart", description="Botni qayta yuklash / yangilash"),
         BotCommand(command="help", description="Qo'llanma va yordam"),
         BotCommand(command="cancel", description="Joriy amalni bekor qilish"),
     ]
     await bot.set_my_commands(commands)
+
 
 
 import os
