@@ -96,7 +96,7 @@ async def start_expense(message: Message, state: FSMContext):
 
 
 # 3. Summani qabul qilish va Toifani so'rash
-@router.message(TransactionState.amount)
+@router.message(TransactionState.amount, F.text)
 async def process_amount(message: Message, state: FSMContext):
     # Bekor qilish tugmasi bosilgan bo'lsa
     if message.text == "❌ Bekor qilish":
@@ -165,7 +165,7 @@ async def process_skip_comment(callback: CallbackQuery, state: FSMContext):
 
 
 # 6. Izohni matn sifatida qabul qilish
-@router.message(TransactionState.comment)
+@router.message(TransactionState.comment, F.text)
 async def process_comment(message: Message, state: FSMContext):
     if message.text == "❌ Bekor qilish":
         await state.clear()

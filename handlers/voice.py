@@ -16,7 +16,7 @@ router = Router()
 @router.message(F.voice | F.audio)
 async def handle_voice_message(message: Message, state: FSMContext):
     """Foydalanuvchining ovozli xabarini qabul qilish va AI orqali tahlil qilish"""
-    # Foydalanuvchi biror boshqa holatda bo'lsa tozalaymiz
+    state_data = await state.get_data()
     await state.clear()
 
     voice = message.voice or message.audio
@@ -33,7 +33,7 @@ async def handle_voice_message(message: Message, state: FSMContext):
         await message.bot.download_file(file.file_path, destination=audio_stream)
         audio_bytes = audio_stream.getvalue()
 
-        # Gemini AI orqali ovozni tahlil qilish
+        # Ovozni tahlil qilish
         result = await process_voice_audio(audio_bytes)
 
         if not result["success"]:
@@ -45,11 +45,12 @@ async def handle_voice_message(message: Message, state: FSMContext):
                 )
                 return
             else:
+                err_text = result.get("message", "Noma'lum xatolik")
                 await processing_msg.edit_text(
-                    "⚠️ Ovozni tahlil qilishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring yoki matn ko'rinishida yozing."
+                    f"⚠️ Ovozni tahlil qilishda xatolik yuz berdi:\n<code>{err_text[:100]}</code>",
+                    parse_mode="HTML"
                 )
                 return
-
 
         data = result["data"]
 
@@ -69,6 +70,10 @@ async def handle_voice_message(message: Message, state: FSMContext):
             return
 
         tr_type = data.get("type", "expense")
+        # Agar foydalanuvchi oldin 'Kirim qo'shish' tugmasini bosgan bo'lsa
+        if state_data.get("tr_type"):
+            tr_type = state_data["tr_type"]
+
         amount = float(data.get("amount", 0))
         category = data.get("category", "📦 Boshqa chiqim" if tr_type == "expense" else "📦 Boshqa kirim")
         comment = data.get("comment", "")
@@ -101,7 +106,12 @@ async def handle_voice_message(message: Message, state: FSMContext):
         
         response += f"\n💰 <b>Joriy sof balans:</b> {format_money(balance_info['balance'])}"
 
-        await processing_msg.edit_text(response, parse_mode="HTML")
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
+
+        await message.answer(response, reply_markup=get_main_keyboard(), parse_mode="HTML")
 
     except Exception as e:
         logger.error(f"Voice handler exception: {e}", exc_info=True)
@@ -109,4 +119,5 @@ async def handle_voice_message(message: Message, state: FSMContext):
             f"⚠️ Ovozli xabarni qabul qilishda xatolik yuz berdi:\n<code>{str(e)[:100]}</code>",
             parse_mode="HTML"
         )
+
 
