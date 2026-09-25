@@ -37,23 +37,19 @@ async def handle_voice_message(message: Message, state: FSMContext):
         result = await process_voice_audio(audio_bytes)
 
         if not result["success"]:
-            if result.get("error_type") == "no_api_key":
-                help_text = (
-                    "🎙 <b>Ovozli xabarlarni tushunish funksiyasi tayyor!</b>\n\n"
-                    "Lekin botda <b>GEMINI_API_KEY</b> kaliti hali kiritilmagan.\n\n"
-                    "Uni olish juda oson va mutlaqo bepul (1 daqiqa):\n"
-                    "1. <a href='https://aistudio.google.com/apikey'>aistudio.google.com/apikey</a> saytiga kiring;\n"
-                    "2. <b>'Create API key'</b> tugmasini bosing;\n"
-                    "3. Chiqqan kalitni Render.com dagi <b>Environment Variables</b> bo'limiga <code>GEMINI_API_KEY</code> nomi bilan qo'shing.\n\n"
-                    "Shundan so'ng bot ovozingizni mukammal tushunadi!"
+            if result.get("error_type") == "no_speech":
+                await processing_msg.edit_text(
+                    "🎙 <b>Ovoz aniq eshitilmadi.</b>\n"
+                    "Iltimos, mikrofonga yaqinroq bo'lib, aniqroq ovoz yuboring (masalan: <i>'Tushlik 25 ming'</i>).",
+                    parse_mode="HTML"
                 )
-                await processing_msg.edit_text(help_text, parse_mode="HTML", disable_web_page_preview=True)
                 return
             else:
                 await processing_msg.edit_text(
                     "⚠️ Ovozni tahlil qilishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring yoki matn ko'rinishida yozing."
                 )
                 return
+
 
         data = result["data"]
 
