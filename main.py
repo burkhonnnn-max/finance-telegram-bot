@@ -8,7 +8,7 @@ from aiogram.types import BotCommand
 
 from config import BOT_TOKEN
 import database as db
-from handlers import common, transactions, reports, history
+from handlers import common, transactions, reports, history, voice
 
 # Windows konsoli uchun UTF-8 kodlashni yoqish
 if sys.platform == "win32":
@@ -79,6 +79,7 @@ async def main():
     # Routerlarni ulash
     dp.include_router(common.router)
     dp.include_router(transactions.router)
+    dp.include_router(voice.router)
     dp.include_router(reports.router)
     dp.include_router(history.router)
 
