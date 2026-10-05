@@ -39,6 +39,14 @@ async def init_db():
         """)
 
         await db.execute("CREATE INDEX IF NOT EXISTS idx_user_trans ON transactions (user_id, created_at)")
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS sent_monthly_reports (
+                year_month TEXT PRIMARY KEY,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                users_count INTEGER DEFAULT 0
+            )
+        """)
         await db.commit()
 
 
@@ -222,3 +230,61 @@ async def get_stats_for_period(user_id: int, start_date: str, end_date: str) -> 
             "categories_expense": categories_expense,
             "categories_income": categories_income
         }
+
+
+async def get_all_users() -> List[Dict[str, Any]]:
+    """Barcha faol foydalanuvchilar ro'yxatini olish"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT u.user_id, COALESCE(u.full_name, 'Foydalanuvchi') as full_name, u.language
+            FROM users u
+            UNION
+            SELECT DISTINCT t.user_id, 'Foydalanuvchi' as full_name, 'uz' as language
+            FROM transactions t
+            WHERE t.user_id NOT IN (SELECT user_id FROM users)
+        """) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def get_month_transactions(user_id: int, year: int, month: int) -> List[Dict[str, Any]]:
+    """Muayyan oy uchun foydalanuvchining barcha tranzaksiyalari"""
+    import calendar
+    _, last_day = calendar.monthrange(year, month)
+    start_date = f"{year}-{month:02d}-01 00:00:00"
+    end_date = f"{year}-{month:02d}-{last_day:02d} 23:59:59"
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT id, type, amount, category, comment, created_at
+            FROM transactions
+            WHERE user_id = ? AND created_at >= ? AND created_at <= ?
+            ORDER BY created_at ASC, id ASC
+        """, (user_id, start_date, end_date)) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def is_monthly_report_sent(year_month: str) -> bool:
+    """Muayyan oy hisoboti yuborilgan yoki yo'qligini tekshirish"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT 1 FROM sent_monthly_reports WHERE year_month = ?", (year_month,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return bool(row)
+
+
+async def mark_monthly_report_sent(year_month: str, users_count: int):
+    """Oy hisoboti yuborilgan deb belgilash"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO sent_monthly_reports (year_month, users_count)
+            VALUES (?, ?)
+            ON CONFLICT(year_month) DO UPDATE SET
+                sent_at = CURRENT_TIMESTAMP,
+                users_count = excluded.users_count
+        """, (year_month, users_count))
+        await db.commit()

@@ -166,3 +166,53 @@ async def process_report_period(callback: CallbackQuery):
         parse_mode="HTML"
     )
     await callback.answer()
+
+
+@router.callback_query(F.data == "report_excel_current")
+async def handle_excel_callback(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    user_name = callback.from_user.full_name or "Foydalanuvchi"
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+    now = datetime.now()
+
+    wait_msg = "⏳ Excel fayl tayyorlanmoqda, kuting..." if user_lang != "ru" else "⏳ Формируется файл Excel, подождите..."
+    await callback.answer(wait_msg)
+
+    from monthly_scheduler import send_user_excel_report
+    await send_user_excel_report(
+        bot=callback.bot,
+        user_id=user_id,
+        user_name=user_name,
+        user_lang=user_lang,
+        year=now.year,
+        month=now.month,
+        is_auto=False
+    )
+
+
+@router.message(F.text.in_({"/excel", "📥 Excel hisobot", "📥 Скачать Excel"}), StateFilter("*"))
+async def handle_excel_command(message: Message, state: FSMContext):
+    await state.clear()
+    user_id = message.from_user.id
+    user_name = message.from_user.full_name or "Foydalanuvchi"
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+    now = datetime.now()
+
+    wait_text = "⏳ <b>Excel hisobot tayyorlanmoqda...</b>" if user_lang != "ru" else "⏳ <b>Формируется отчёт в Excel...</b>"
+    temp_msg = await message.answer(wait_text, parse_mode="HTML")
+
+    from monthly_scheduler import send_user_excel_report
+    await send_user_excel_report(
+        bot=message.bot,
+        user_id=user_id,
+        user_name=user_name,
+        user_lang=user_lang,
+        year=now.year,
+        month=now.month,
+        is_auto=False
+    )
+    try:
+        await temp_msg.delete()
+    except Exception:
+        pass
+

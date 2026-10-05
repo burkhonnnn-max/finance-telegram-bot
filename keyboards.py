@@ -112,6 +112,12 @@ def get_report_period_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text=t("report_last_month", lang), callback_data="report_last_month"),
                 InlineKeyboardButton(text=t("report_all", lang), callback_data="report_all")
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📥 " + ("Скачать Excel (.xlsx)" if lang == "ru" else "Excel hisobot (.xlsx)"),
+                    callback_data="report_excel_current"
+                )
             ]
         ]
     )

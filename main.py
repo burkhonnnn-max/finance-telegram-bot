@@ -36,6 +36,7 @@ BASE_WEBHOOK_URL = (os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBHOOK_URL")
 async def set_bot_commands(bot: Bot):
     commands = [
         BotCommand(command="start", description="Botni ishga tushirish / Запустить"),
+        BotCommand(command="excel", description="Oylik Excel hisobot / Скачать Excel-отчет"),
         BotCommand(command="language", description="Tilni tanlash / Выбрать язык"),
         BotCommand(command="restart", description="Botni qayta yuklash / Перезагрузить"),
         BotCommand(command="help", description="Qo'llanma va yordam / Помощь"),
@@ -45,16 +46,24 @@ async def set_bot_commands(bot: Bot):
 
 
 async def handle_health(request):
+    from monthly_scheduler import get_tashkent_now
+    now = get_tashkent_now()
     return web.json_response({
         "status": "ok",
         "service": "finance-telegram-bot",
-        "webhook_url": f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}" if BASE_WEBHOOK_URL else "polling"
+        "webhook_url": f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}" if BASE_WEBHOOK_URL else "polling",
+        "tashkent_time": now.strftime("%Y-%m-%d %H:%M:%S")
     })
 
 
 async def on_startup(bot: Bot):
     await db.init_db()
     await set_bot_commands(bot)
+
+    # Har oyning oxirgi kuni soat 22:00 da hisobot jo'natuvchi schedulerni orqa fonda yoqish
+    from monthly_scheduler import start_monthly_scheduler
+    asyncio.create_task(start_monthly_scheduler(bot))
+
     if BASE_WEBHOOK_URL:
         webhook_url = f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}"
         logger.info(f"Webhook o'rnatilmoqda: {webhook_url}")
