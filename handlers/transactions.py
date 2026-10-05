@@ -10,52 +10,57 @@ from keyboards import (
     get_confirm_keyboard,
     get_type_keyboard,
     get_categories_keyboard,
-    get_comment_skip_keyboard,
-    EXPENSE_CATEGORIES,
-    INCOME_CATEGORIES
 )
 from utils import format_money, parse_amount, parse_quick_entry
 from ai_voice import parse_financial_intent, extract_number_from_text
 import pending_manager as pm
+from locales import t
 
 logger = logging.getLogger(__name__)
 router = Router()
 
-CATEGORY_NAMES = dict(EXPENSE_CATEGORIES + INCOME_CATEGORIES)
+MENU_BUTTONS = {
+    "💰 Kirim", "💳 Chiqim", "➕ Kirim qo'shish", "➖ Chiqim qo'shish",
+    "💰 Доход", "💳 Расход", "➕ Доход", "➖ Расход",
+    "📊 Statistika & Hisobot", "📊 Statistika", "📊 Статистика и отчёты", "📊 Статистика",
+    "💰 Mening balansim", "💵 Mening balansim", "💰 Мой баланс",
+    "🕒 Oxirgi amallar", "🕒 История операций",
+    "ℹ️ Qanday ishlatiladi?", "ℹ️ Yordam", "ℹ️ Помощь",
+    "🌐 Til / Язык",
+    "❌ Bekor qilish", "❌ Отмена"
+}
 
 
 # =========================================================================
-# 1. DOIMIY MENYUDAGI "💰 Kirim" VA "💳 Chiqim" TUGMALARI
+# 1. DOIMIY MENYUDAGI "💰 Kirim / Доход" VA "💳 Chiqim / Расход"
 # =========================================================================
 
-@router.message(F.text.in_({"💰 Kirim", "➕ Kirim qo'shish"}))
+@router.message(F.text.in_({"💰 Kirim", "➕ Kirim qo'shish", "💰 Доход", "➕ Доход"}))
 async def start_income(message: Message, state: FSMContext):
-    """Foydalanuvchi quyi menyudan Kirim tugmasini bosganda"""
+    """Kirim / Доход tugmasi bosilganda"""
     await state.clear()
     await state.update_data(tr_type="income")
     await state.set_state(TransactionState.waiting_input)
 
+    user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
     await message.answer(
-        "🟢 <b>Kirim bo'limi tanlandi!</b>\n\n"
-        "Iltimos, summani va nima uchunligini <b>yozing</b> (masalan: <i>'500 000 oylik'</i> yoki <i>'100k frilans'</i>)\n"
-        "yoki 🎙 <b>ovozli xabar</b> yuboring:",
-        reply_markup=get_main_keyboard(),
+        t("income_prompt", user_lang),
+        reply_markup=get_main_keyboard(user_lang),
         parse_mode="HTML"
     )
 
 
-@router.message(F.text.in_({"💳 Chiqim", "➖ Chiqim qo'shish"}))
+@router.message(F.text.in_({"💳 Chiqim", "➖ Chiqim qo'shish", "💳 Расход", "➖ Расход"}))
 async def start_expense(message: Message, state: FSMContext):
-    """Foydalanuvchi quyi menyudan Chiqim tugmasini bosganda"""
+    """Chiqim / Расход tugmasi bosilganda"""
     await state.clear()
     await state.update_data(tr_type="expense")
     await state.set_state(TransactionState.waiting_input)
 
+    user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
     await message.answer(
-        "🔴 <b>Chiqim bo'limi tanlandi!</b>\n\n"
-        "Iltimos, summani va nima uchunligini <b>yozing</b> (masalan: <i>'25 000 tushlik'</i> yoki <i>'15k taxi'</i>)\n"
-        "yoki 🎙 <b>ovozli xabar</b> yuboring:",
-        reply_markup=get_main_keyboard(),
+        t("expense_prompt", user_lang),
+        reply_markup=get_main_keyboard(user_lang),
         parse_mode="HTML"
     )
 
@@ -66,14 +71,16 @@ async def start_expense(message: Message, state: FSMContext):
 
 @router.message(TransactionState.waiting_input, F.text)
 async def process_waiting_input(message: Message, state: FSMContext):
+    user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
+
     # Agar bekor qilish so'ralsa
-    if message.text in ("❌ Bekor qilish", "/cancel"):
+    if message.text in ("❌ Bekor qilish", "❌ Отмена", "/cancel"):
         await state.clear()
-        await message.answer("Amal bekor qilindi.", reply_markup=get_main_keyboard())
+        await message.answer(t("cancelled", user_lang), reply_markup=get_main_keyboard(user_lang))
         return
 
-    # Agar boshqa bo'lim tugmasi bosilgan bo'lsa
-    if message.text in ("📊 Statistika & Hisobot", "💰 Mening balansim", "💵 Mening balansim", "🕒 Oxirgi amallar", "ℹ️ Qanday ishlatiladi?"):
+    # Agar boshqa menyu tugmasi bosilgan bo'lsa
+    if message.text in MENU_BUTTONS:
         await state.clear()
         return
 
@@ -82,19 +89,16 @@ async def process_waiting_input(message: Message, state: FSMContext):
 
     parsed = parse_financial_intent(message.text, forced_type=tr_type)
     if not parsed.get("is_finance") or not parsed.get("amount"):
-        await message.answer(
-            "⚠️ Summa aniqlanmadi.\n\n"
-            "Iltimos, summani ham kiriting, masalan:\n"
-            "• <code>25000 tushlik</code>\n"
-            "• <code>50k bozorlik</code>\n"
-            "• <code>100000</code>",
-            parse_mode="HTML"
+        err_msg = (
+            "⚠️ Сумма не найдена.\n\nПожалуйста, укажите также сумму, например:\n• <code>25000 обед</code>\n• <code>50k продукты</code>\n• <code>100000</code>"
+            if user_lang == "ru"
+            else "⚠️ Summa aniqlanmadi.\n\nIltimos, summani ham kiriting, masalan:\n• <code>25000 tushlik</code>\n• <code>50k bozorlik</code>\n• <code>100000</code>"
         )
+        await message.answer(err_msg, parse_mode="HTML")
         return
 
     await state.clear()
 
-    # Tasdiqlash uchun vaqtinchalik saqlash
     amount = parsed["amount"]
     category = parsed.get("category") or ("📦 Boshqa kirim" if tr_type == "income" else "📦 Boshqa chiqim")
     comment = parsed.get("comment", "")
@@ -111,11 +115,11 @@ async def process_waiting_input(message: Message, state: FSMContext):
     )
 
     pending_data = pm.get_pending(pending_id)
-    summary_text = pm.format_summary(pending_data, is_fix_mode=False)
+    summary_text = pm.format_summary(pending_data, is_fix_mode=False, lang=user_lang)
 
     await message.answer(
         summary_text,
-        reply_markup=get_confirm_keyboard(pending_id),
+        reply_markup=get_confirm_keyboard(pending_id, lang=user_lang),
         parse_mode="HTML"
     )
 
@@ -128,12 +132,16 @@ async def process_waiting_input(message: Message, state: FSMContext):
 @router.message(lambda msg: msg.text and (msg.text.startswith("+") or msg.text.startswith("-")))
 async def handle_quick_entry(message: Message, state: FSMContext):
     await state.clear()
+    user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
+
     parsed = parse_quick_entry(message.text)
     if not parsed:
-        await message.answer(
-            "⚠️ Summa noto'g'ri kiritildi.\nMasalan: <code>-15000 tushlik</code> yoki <code>+50000 oylik</code>",
-            parse_mode="HTML"
+        err_msg = (
+            "⚠️ Неверный формат суммы.\nНапример: <code>-15000 обед</code> или <code>+50000 зарплата</code>"
+            if user_lang == "ru"
+            else "⚠️ Summa noto'g'ri kiritildi.\nMasalan: <code>-15000 tushlik</code> yoki <code>+50000 oylik</code>"
         )
+        await message.answer(err_msg, parse_mode="HTML")
         return
 
     pending_id = pm.create_pending(
@@ -148,31 +156,23 @@ async def handle_quick_entry(message: Message, state: FSMContext):
     )
 
     pending_data = pm.get_pending(pending_id)
-    summary_text = pm.format_summary(pending_data, is_fix_mode=False)
+    summary_text = pm.format_summary(pending_data, is_fix_mode=False, lang=user_lang)
 
     await message.answer(
         summary_text,
-        reply_markup=get_confirm_keyboard(pending_id),
+        reply_markup=get_confirm_keyboard(pending_id, lang=user_lang),
         parse_mode="HTML"
     )
-
-
-MENU_BUTTONS = {
-    "💰 Kirim", "💳 Chiqim", "➕ Kirim qo'shish", "➖ Chiqim qo'shish",
-    "📊 Statistika & Hisobot", "📊 Statistika",
-    "💰 Mening balansim", "💵 Mening balansim",
-    "🕒 Oxirgi amallar", "ℹ️ Qanday ishlatiladi?", "ℹ️ Yordam", "❌ Bekor qilish"
-}
 
 
 # B. Oddiy matn xabari (ichida summa va maqsad aytilgan bo'lsa)
 @router.message(F.text & ~F.text.startswith("/") & ~F.text.in_(MENU_BUTTONS))
 async def handle_general_text_entry(message: Message, state: FSMContext):
-    # Summa bor-yo'qligini tekshirish
     amount = extract_number_from_text(message.text)
     if not amount or amount <= 0:
         return
 
+    user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
     parsed = parse_financial_intent(message.text)
     tr_type = parsed.get("type", "expense")
     category = parsed.get("category", "📦 Boshqa chiqim")
@@ -190,10 +190,10 @@ async def handle_general_text_entry(message: Message, state: FSMContext):
     )
 
     pending_data = pm.get_pending(pending_id)
-    summary_text = pm.format_summary(pending_data, is_fix_mode=False)
+    summary_text = pm.format_summary(pending_data, is_fix_mode=False, lang=user_lang)
 
     await message.answer(
         summary_text,
-        reply_markup=get_confirm_keyboard(pending_id),
+        reply_markup=get_confirm_keyboard(pending_id, lang=user_lang),
         parse_mode="HTML"
     )

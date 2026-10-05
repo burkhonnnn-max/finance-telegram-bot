@@ -12,32 +12,9 @@ def format_money(amount: float) -> str:
 
 
 def parse_amount(text: str) -> Optional[float]:
-    """Foydalanuvchi kiritgan summani songa aylantirish (masalan: 50000, 50 000, 50k, 1.5mln)"""
-    if not text:
-        return None
-
-    cleaned = text.strip().lower()
-
-    # 1. 35 000 kabi probelli sonlarni birlashtirish
-    cleaned = re.sub(r'(\d+)\s+(\d{3})', r'\1\2', cleaned)
-
-    # 2. 50k, 50ming, 1.5m, 1.5mln, 20 million
-    match = re.search(r'(\d+(?:[.,]\d+)?)\s*(k|ming|mln|million|m)?\b', cleaned)
-    if match:
-        num_str = match.group(1).replace(',', '.')
-        unit = match.group(2)
-        try:
-            val = float(num_str)
-            if unit in ('k', 'ming'):
-                val *= 1000
-            elif unit in ('mln', 'million', 'm'):
-                val *= 1000000
-            if val > 0:
-                return val
-        except ValueError:
-            pass
-
-    return None
+    """Foydalanuvchi kiritgan summani songa aylantirish (masalan: 50000, 50 000, 50k, 1.5mln, 100 тыс)"""
+    from ai_voice import extract_number_from_text
+    return extract_number_from_text(text)
 
 
 def parse_quick_entry(text: str) -> Optional[Dict[str, Any]]:

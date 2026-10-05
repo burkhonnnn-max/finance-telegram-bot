@@ -2,6 +2,7 @@ import uuid
 from typing import Dict, Any, Optional
 import database as db
 from utils import format_money
+from locales import t, localize_category
 
 # Xotirada vaqtinchalik tasdiqlashni kutayotgan tranzaksiyalar
 # {pending_id: {user_id, full_name, username, type, amount, category, comment, transcript}}
@@ -49,32 +50,34 @@ def delete_pending(pending_id: str):
     _pending_items.pop(pending_id, None)
 
 
-def format_summary(data: Dict[str, Any], is_fix_mode: bool = False) -> str:
-    """Foydalanuvchiga ko'rsatiladigan tasdiqlash kartochkasi"""
+def format_summary(data: Dict[str, Any], is_fix_mode: bool = False, lang: str = "uz") -> str:
+    """Foydalanuvchiga ko'rsatiladigan tasdiqlash kartochkasi (uz yoki ru)"""
     tr_type = data.get("type", "expense")
     amount = data.get("amount", 0.0)
     category = data.get("category", "")
+    localized_cat = localize_category(category, lang)
     comment = data.get("comment", "")
     transcript = data.get("transcript", "")
 
     sign = "🟢" if tr_type == "income" else "🔴"
-    type_label = "Kirim" if tr_type == "income" else "Chiqim"
+    type_label = t("income_name", lang) if tr_type == "income" else t("expense_name", lang)
 
     text = ""
     if transcript:
-        text += f"🎙 <b>Eshitildi:</b> «<i>{transcript}</i>»\n\n"
+        heard_label = t("heard", lang)
+        text += f"🎙 <b>{heard_label}:</b> «<i>{transcript}</i>»\n\n"
 
-    text += f"📋 <b>Aniqlangan ma'lumot:</b>\n"
-    text += f"   {sign} <b>Tur:</b> {type_label}\n"
-    text += f"   💵 <b>Summa:</b> {format_money(amount)}\n"
-    text += f"   🏷 <b>Toifa:</b> {category}\n"
+    text += f"📋 <b>{t('summary_title', lang)}</b>\n"
+    text += f"   {sign} <b>{t('type_label', lang)}:</b> {type_label}\n"
+    text += f"   💵 <b>{t('amount_label', lang)}:</b> {format_money(amount)}\n"
+    text += f"   🏷 <b>{t('category_label', lang)}:</b> {localized_cat}\n"
     if comment:
-        text += f"   📝 <b>Izoh/Maqsad:</b> {comment}\n"
+        text += f"   📝 <b>{t('comment_label', lang)}:</b> {comment}\n"
 
     if is_fix_mode:
-        text += "\n✏️ <b>Qaysi qismini o'zgartirmoqchisiz?</b>"
+        text += f"\n✏️ <b>{t('which_part_question', lang)}</b>"
     else:
-        text += "\n<b>Ma'lumotlar to'g'rimi?</b>"
+        text += f"\n<b>{t('is_correct_question', lang)}</b>"
 
     return text
 

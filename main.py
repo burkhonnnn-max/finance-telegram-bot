@@ -35,10 +35,11 @@ BASE_WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
 
 async def set_bot_commands(bot: Bot):
     commands = [
-        BotCommand(command="start", description="Botni ishga tushirish"),
-        BotCommand(command="restart", description="Botni qayta yuklash / yangilash"),
-        BotCommand(command="help", description="Qo'llanma va yordam"),
-        BotCommand(command="cancel", description="Joriy amalni bekor qilish"),
+        BotCommand(command="start", description="Botni ishga tushirish / Запустить"),
+        BotCommand(command="language", description="Tilni tanlash / Выбрать язык"),
+        BotCommand(command="restart", description="Botni qayta yuklash / Перезагрузить"),
+        BotCommand(command="help", description="Qo'llanma va yordam / Помощь"),
+        BotCommand(command="cancel", description="Bekor qilish / Отмена"),
     ]
     await bot.set_my_commands(commands)
 

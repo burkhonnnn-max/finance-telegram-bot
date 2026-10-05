@@ -4,6 +4,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
+import database as db
 from ai_voice import process_voice_audio, parse_financial_intent
 from utils import format_money, parse_amount
 from states import PendingEditState
@@ -14,6 +15,7 @@ from keyboards import (
     get_type_keyboard,
 )
 import pending_manager as pm
+from locales import t, localize_category
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -21,8 +23,7 @@ router = Router()
 
 @router.message(F.voice | F.audio)
 async def handle_voice_message(message: Message, state: FSMContext):
-    """Foydalanuvchining ovozli xabarini qabul qilish va AI orqali tahlil qilish"""
-    # Agar foydalanuvchi oldin Kirim yoki Chiqim tugmasini tanlagan bo'lsa
+    """Foydalanuvchining ovozli xabarini qabul qilish va AI orqali tahlil qilish (o'zbek va rus)"""
     state_data = await state.get_data()
     preselected_type = state_data.get("tr_type")
     await state.clear()
@@ -31,9 +32,12 @@ async def handle_voice_message(message: Message, state: FSMContext):
     if not voice:
         return
 
+    user_id = message.from_user.id
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+
     # Jarayon ketayotganini bildirish
     processing_msg = await message.answer(
-        "🎙 <i>Ovozingiz eshitilmoqda va tahlil qilinmoqda...</i>", parse_mode="HTML"
+        t("voice_processing", user_lang), parse_mode="HTML"
     )
 
     try:
@@ -43,22 +47,20 @@ async def handle_voice_message(message: Message, state: FSMContext):
         await message.bot.download_file(file.file_path, destination=audio_stream)
         audio_bytes = audio_stream.getvalue()
 
-        # Ovozni tahlil qilish
+        # Ovozni ko'p tilli tahlil qilish
         result = await process_voice_audio(audio_bytes, forced_type=preselected_type)
 
         if not result.get("success"):
             if result.get("error_type") == "no_speech":
                 await processing_msg.edit_text(
-                    "🎙 <b>Ovoz aniq eshitilmadi.</b>\n\n"
-                    "Iltimos, mikrofonga yaqinroq gapiring yoki xabarni yozma shaklda yuboring "
-                    "(masalan: <i>'25 000 tushlik'</i>).",
+                    t("voice_no_speech", user_lang),
                     parse_mode="HTML"
                 )
                 return
             else:
                 err_text = result.get("message", "Noma'lum xatolik")
                 await processing_msg.edit_text(
-                    f"⚠️ Ovozni tahlil qilishda xatolik yuz berdi:\n<code>{err_text[:200]}</code>",
+                    t("voice_error", user_lang, error=err_text[:200]),
                     parse_mode="HTML"
                 )
                 return
@@ -68,14 +70,8 @@ async def handle_voice_message(message: Message, state: FSMContext):
         # Agar summa aniqlanmagan bo'lsa
         if not data.get("is_finance", True) or not data.get("amount"):
             transcript = data.get("transcript", "")
-            transcript_text = f"«<i>{transcript}</i>»\n\n" if transcript else ""
             await processing_msg.edit_text(
-                f"🎙 <b>Eshitildi:</b> {transcript_text}"
-                f"⚠️ Ovozdan summa aniqlanmadi.\n\n"
-                f"Iltimos, summani ham aytib o'ting, masalan:\n"
-                f"• <i>'Tushlikka 30 ming sarfladim'</i>\n"
-                f"• <i>'Taksiga 15 ming ketdi'</i>\n"
-                f"• <i>'Oylik 1 million tushdi'</i>",
+                t("voice_no_amount", user_lang, transcript=transcript),
                 parse_mode="HTML"
             )
             return
@@ -89,7 +85,7 @@ async def handle_voice_message(message: Message, state: FSMContext):
 
         # Vaqtinchalik xotiraga saqlash
         pending_id = pm.create_pending(
-            user_id=message.from_user.id,
+            user_id=user_id,
             full_name=message.from_user.full_name,
             username=message.from_user.username,
             tr_type=tr_type,
@@ -100,7 +96,7 @@ async def handle_voice_message(message: Message, state: FSMContext):
         )
 
         pending_data = pm.get_pending(pending_id)
-        summary_text = pm.format_summary(pending_data, is_fix_mode=False)
+        summary_text = pm.format_summary(pending_data, is_fix_mode=False, lang=user_lang)
 
         try:
             await processing_msg.delete()
@@ -110,14 +106,14 @@ async def handle_voice_message(message: Message, state: FSMContext):
         # Done va Fix tugmalari bilan natijani ko'rsatish
         await message.answer(
             summary_text,
-            reply_markup=get_confirm_keyboard(pending_id),
+            reply_markup=get_confirm_keyboard(pending_id, lang=user_lang),
             parse_mode="HTML"
         )
 
     except Exception as e:
         logger.error(f"Voice handler exception: {e}", exc_info=True)
         await processing_msg.edit_text(
-            f"⚠️ Ovozli xabarni qabul qilishda xatolik yuz berdi:\n<code>{str(e)[:200]}</code>",
+            t("voice_error", user_lang, error=str(e)[:200]),
             parse_mode="HTML"
         )
 
@@ -133,8 +129,11 @@ async def process_done_callback(callback: CallbackQuery, state: FSMContext):
     data = pm.pop_pending(pending_id)
     await state.clear()
 
+    user_id = callback.from_user.id
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+
     if not data:
-        await callback.answer("⏳ Bu amal eskirgan yoki saqlab bo'lingan.", show_alert=True)
+        await callback.answer(t("expired", user_lang), show_alert=True)
         try:
             await callback.message.delete()
         except Exception:
@@ -146,19 +145,20 @@ async def process_done_callback(callback: CallbackQuery, state: FSMContext):
 
     tr_type = data["type"]
     sign = "🟢 +" if tr_type == "income" else "🔴 -"
-    type_label = "Kirim" if tr_type == "income" else "Chiqim"
+    type_label = t("income_name", user_lang) if tr_type == "income" else t("expense_name", user_lang)
+    localized_cat = localize_category(data["category"], user_lang)
 
     response = (
-        f"✅ <b>{type_label} muvaffaqiyatli saqlandi!</b>\n\n"
-        f"💵 <b>Summa:</b> {sign}{format_money(data['amount'])}\n"
-        f"🏷 <b>Toifa:</b> {data['category']}\n"
+        f"✅ <b>{type_label} {t('saved_success', user_lang)}</b>\n\n"
+        f"💵 <b>{t('amount_label', user_lang)}:</b> {sign}{format_money(data['amount'])}\n"
+        f"🏷 <b>{t('category_label', user_lang)}:</b> {localized_cat}\n"
     )
     if data.get("comment"):
-        response += f"📝 <b>Izoh:</b> {data['comment']}\n"
-    response += f"\n💰 <b>Joriy sof balans:</b> {format_money(balance_info['balance'])}"
+        response += f"📝 <b>{t('comment_label', user_lang)}:</b> {data['comment']}\n"
+    response += f"\n💰 <b>{t('current_balance', user_lang)}</b> {format_money(balance_info['balance'])}"
 
     await callback.message.edit_text(response, parse_mode="HTML")
-    await callback.answer("✅ Muvaffaqiyatli saqlandi!")
+    await callback.answer("✅")
 
 
 @router.callback_query(F.data.startswith("pfix_"))
@@ -167,18 +167,21 @@ async def process_fix_callback(callback: CallbackQuery, state: FSMContext):
     pending_id = callback.data.replace("pfix_", "")
     data = pm.get_pending(pending_id)
 
+    user_id = callback.from_user.id
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+
     if not data:
-        await callback.answer("⏳ Bu amal eskirgan.", show_alert=True)
+        await callback.answer(t("expired", user_lang), show_alert=True)
         try:
             await callback.message.delete()
         except Exception:
             pass
         return
 
-    summary = pm.format_summary(data, is_fix_mode=True)
+    summary = pm.format_summary(data, is_fix_mode=True, lang=user_lang)
     await callback.message.edit_text(
         summary,
-        reply_markup=get_fix_keyboard(pending_id),
+        reply_markup=get_fix_keyboard(pending_id, lang=user_lang),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -191,7 +194,8 @@ async def process_cancel_callback(callback: CallbackQuery, state: FSMContext):
     pm.delete_pending(pending_id)
     await state.clear()
 
-    await callback.message.edit_text("❌ <b>Amal bekor qilindi.</b>", parse_mode="HTML")
+    user_lang = (await db.get_user_language(callback.from_user.id)) or "uz"
+    await callback.message.edit_text(f"❌ <b>{t('cancelled', user_lang)}</b>", parse_mode="HTML")
     await callback.answer()
 
 
@@ -200,26 +204,30 @@ async def process_cancel_callback(callback: CallbackQuery, state: FSMContext):
 async def process_edit_amount_click(callback: CallbackQuery, state: FSMContext):
     pending_id = callback.data.replace("pedit_amt_", "")
     data = pm.get_pending(pending_id)
+
+    user_id = callback.from_user.id
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+
     if not data:
-        await callback.answer("⏳ Amal eskirgan.", show_alert=True)
+        await callback.answer(t("expired", user_lang), show_alert=True)
         return
 
     await state.set_state(PendingEditState.edit_amount)
     await state.update_data(pending_id=pending_id)
 
-    await callback.message.edit_text(
-        f"💵 Hozirgi summa: <b>{format_money(data['amount'])}</b>\n\n"
-        f"Yangi summani kiriting (masalan: <code>50000</code> yoki <code>50k</code>):",
-        parse_mode="HTML"
-    )
+    prompt = t("edit_amount_prompt", user_lang, amount=format_money(data['amount']))
+    await callback.message.edit_text(prompt, parse_mode="HTML")
     await callback.answer()
 
 
 @router.message(PendingEditState.edit_amount, F.text)
 async def process_new_amount_input(message: Message, state: FSMContext):
-    if message.text == "❌ Bekor qilish":
+    user_id = message.from_user.id
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+
+    if message.text in ("❌ Bekor qilish", "❌ Отмена"):
         await state.clear()
-        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard())
+        await message.answer(t("cancelled", user_lang), reply_markup=get_main_keyboard(user_lang))
         return
 
     state_data = await state.get_data()
@@ -228,25 +236,26 @@ async def process_new_amount_input(message: Message, state: FSMContext):
 
     if not data:
         await state.clear()
-        await message.answer("⏳ Amal eskirgan, qayta yuboring.", reply_markup=get_main_keyboard())
+        await message.answer(t("expired", user_lang), reply_markup=get_main_keyboard(user_lang))
         return
 
     new_amount = parse_amount(message.text)
     if not new_amount or new_amount <= 0:
-        await message.answer(
-            "⚠️ Summani to'g'ri formatda kiriting (musbat son bo'lishi kerak).\n"
-            "Masalan: <code>50000</code> yoki <code>50k</code>",
-            parse_mode="HTML"
+        err_msg = (
+            "⚠️ Пожалуйста, введите сумму корректно (например: <code>50000</code> или <code>50k</code>):"
+            if user_lang == "ru"
+            else "⚠️ Iltimos, summani to'g'ri formatda kiriting (masalan: <code>50000</code> yoki <code>50k</code>):"
         )
+        await message.answer(err_msg, parse_mode="HTML")
         return
 
     data["amount"] = new_amount
     await state.clear()
 
-    summary = pm.format_summary(data, is_fix_mode=True)
+    summary = pm.format_summary(data, is_fix_mode=True, lang=user_lang)
     await message.answer(
-        f"✅ Summa yangilandi: <b>{format_money(new_amount)}</b>\n\n{summary}",
-        reply_markup=get_fix_keyboard(pending_id),
+        f"✅ {t('amount_updated', user_lang)} <b>{format_money(new_amount)}</b>\n\n{summary}",
+        reply_markup=get_fix_keyboard(pending_id, lang=user_lang),
         parse_mode="HTML"
     )
 
@@ -256,15 +265,19 @@ async def process_new_amount_input(message: Message, state: FSMContext):
 async def process_edit_type_click(callback: CallbackQuery, state: FSMContext):
     pending_id = callback.data.replace("pedit_type_", "")
     data = pm.get_pending(pending_id)
+
+    user_id = callback.from_user.id
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+
     if not data:
-        await callback.answer("⏳ Amal eskirgan.", show_alert=True)
+        await callback.answer(t("expired", user_lang), show_alert=True)
         return
 
-    current = "Kirim" if data["type"] == "income" else "Chiqim"
+    current = t("income_name", user_lang) if data["type"] == "income" else t("expense_name", user_lang)
+    prompt = t("edit_type_prompt", user_lang, type=current)
     await callback.message.edit_text(
-        f"🔄 Hozirgi tur: <b>{current}</b>\n\n"
-        f"Kerakli turni tanlang:",
-        reply_markup=get_type_keyboard(pending_id),
+        prompt,
+        reply_markup=get_type_keyboard(pending_id, lang=user_lang),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -280,8 +293,11 @@ async def process_type_selected(callback: CallbackQuery, state: FSMContext):
         new_type = "expense"
 
     data = pm.get_pending(pending_id)
+    user_id = callback.from_user.id
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+
     if not data:
-        await callback.answer("⏳ Amal eskirgan.", show_alert=True)
+        await callback.answer(t("expired", user_lang), show_alert=True)
         return
 
     data["type"] = new_type
@@ -291,12 +307,12 @@ async def process_type_selected(callback: CallbackQuery, state: FSMContext):
     elif new_type == "expense" and "kirim" in data["category"].lower():
         data["category"] = "📦 Boshqa chiqim"
 
-    type_label = "Kirim" if new_type == "income" else "Chiqim"
-    summary = pm.format_summary(data, is_fix_mode=True)
+    type_label = t("income_name", user_lang) if new_type == "income" else t("expense_name", user_lang)
+    summary = pm.format_summary(data, is_fix_mode=True, lang=user_lang)
 
     await callback.message.edit_text(
-        f"✅ Tur yangilandi: <b>{type_label}</b>\n\n{summary}",
-        reply_markup=get_fix_keyboard(pending_id),
+        f"✅ {t('type_updated', user_lang)} <b>{type_label}</b>\n\n{summary}",
+        reply_markup=get_fix_keyboard(pending_id, lang=user_lang),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -307,27 +323,31 @@ async def process_type_selected(callback: CallbackQuery, state: FSMContext):
 async def process_edit_comment_click(callback: CallbackQuery, state: FSMContext):
     pending_id = callback.data.replace("pedit_comm_", "")
     data = pm.get_pending(pending_id)
+
+    user_id = callback.from_user.id
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+
     if not data:
-        await callback.answer("⏳ Amal eskirgan.", show_alert=True)
+        await callback.answer(t("expired", user_lang), show_alert=True)
         return
 
     await state.set_state(PendingEditState.edit_comment)
     await state.update_data(pending_id=pending_id)
 
     current = data.get("comment", "—")
-    await callback.message.edit_text(
-        f"📝 Hozirgi izoh: <b>{current or '—'}</b>\n\n"
-        f"Yangi izoh yoki sarflash maqsadini yozing:",
-        parse_mode="HTML"
-    )
+    prompt = t("edit_comment_prompt", user_lang, comment=current or "—")
+    await callback.message.edit_text(prompt, parse_mode="HTML")
     await callback.answer()
 
 
 @router.message(PendingEditState.edit_comment, F.text)
 async def process_new_comment_input(message: Message, state: FSMContext):
-    if message.text == "❌ Bekor qilish":
+    user_id = message.from_user.id
+    user_lang = (await db.get_user_language(user_id)) or "uz"
+
+    if message.text in ("❌ Bekor qilish", "❌ Отмена"):
         await state.clear()
-        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard())
+        await message.answer(t("cancelled", user_lang), reply_markup=get_main_keyboard(user_lang))
         return
 
     state_data = await state.get_data()
@@ -336,7 +356,7 @@ async def process_new_comment_input(message: Message, state: FSMContext):
 
     if not data:
         await state.clear()
-        await message.answer("⏳ Amal eskirgan, qayta yuboring.", reply_markup=get_main_keyboard())
+        await message.answer(t("expired", user_lang), reply_markup=get_main_keyboard(user_lang))
         return
 
     new_comment = message.text.strip()
@@ -352,9 +372,9 @@ async def process_new_comment_input(message: Message, state: FSMContext):
 
     await state.clear()
 
-    summary = pm.format_summary(data, is_fix_mode=True)
+    summary = pm.format_summary(data, is_fix_mode=True, lang=user_lang)
     await message.answer(
-        f"✅ Izoh yangilandi: <b>{new_comment}</b>\n\n{summary}",
-        reply_markup=get_fix_keyboard(pending_id),
+        f"✅ {t('comment_updated', user_lang)} <b>{new_comment}</b>\n\n{summary}",
+        reply_markup=get_fix_keyboard(pending_id, lang=user_lang),
         parse_mode="HTML"
     )

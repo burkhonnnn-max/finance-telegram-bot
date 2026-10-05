@@ -13,9 +13,17 @@ async def init_db():
                 full_name TEXT,
                 username TEXT,
                 currency TEXT DEFAULT 'so''m',
+                language TEXT DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # Til ustunini tekshirish va qo'shish (migratsiya)
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN language TEXT DEFAULT NULL")
+            await db.commit()
+        except Exception:
+            pass
 
         await db.execute("""
             CREATE TABLE IF NOT EXISTS transactions (
@@ -34,16 +42,38 @@ async def init_db():
         await db.commit()
 
 
-async def add_user(user_id: int, full_name: str, username: Optional[str] = None):
+async def add_user(user_id: int, full_name: str, username: Optional[str] = None, language: Optional[str] = None):
     """Yangi foydalanuvchini bazaga qo'shish yoki yangilash"""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            INSERT INTO users (user_id, full_name, username)
-            VALUES (?, ?, ?)
+            INSERT INTO users (user_id, full_name, username, language)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 full_name = excluded.full_name,
-                username = excluded.username
-        """, (user_id, full_name, username))
+                username = excluded.username,
+                language = COALESCE(excluded.language, users.language)
+        """, (user_id, full_name, username, language))
+        await db.commit()
+
+
+async def get_user_language(user_id: int) -> Optional[str]:
+    """Foydalanuvchi tanlagan tilni olish ('uz' yoki 'ru')"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT language FROM users WHERE user_id = ?", (user_id,)) as cursor:
+            row = await cursor.fetchone()
+            if row and row[0]:
+                return row[0]
+            return None
+
+
+async def set_user_language(user_id: int, language: str):
+    """Foydalanuvchi tilini yangilash (agar foydalanuvchi yo'q bo'lsa yaratadi)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO users (user_id, language)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET language = excluded.language
+        """, (user_id, language))
         await db.commit()
 
 
