@@ -2,6 +2,7 @@ import logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from aiogram.filters import StateFilter
 
 import database as db
 from states import TransactionState
@@ -10,6 +11,7 @@ from keyboards import (
     get_confirm_keyboard,
     get_type_keyboard,
     get_categories_keyboard,
+    MENU_BUTTONS,
 )
 from utils import format_money, parse_amount, parse_quick_entry
 from ai_voice import parse_financial_intent, extract_number_from_text
@@ -19,25 +21,14 @@ from locales import t
 logger = logging.getLogger(__name__)
 router = Router()
 
-MENU_BUTTONS = {
-    "💰 Kirim", "💳 Chiqim", "➕ Kirim qo'shish", "➖ Chiqim qo'shish",
-    "💰 Доход", "💳 Расход", "➕ Доход", "➖ Расход",
-    "📊 Statistika & Hisobot", "📊 Statistika", "📊 Статистика и отчёты", "📊 Статистика",
-    "💰 Mening balansim", "💵 Mening balansim", "💰 Мой баланс",
-    "🕒 Oxirgi amallar", "🕒 История операций",
-    "ℹ️ Qanday ishlatiladi?", "ℹ️ Yordam", "ℹ️ Помощь",
-    "🌐 Til / Язык",
-    "❌ Bekor qilish", "❌ Отмена"
-}
-
 
 # =========================================================================
 # 1. DOIMIY MENYUDAGI "💰 Kirim / Доход" VA "💳 Chiqim / Расход"
 # =========================================================================
 
-@router.message(F.text.in_({"💰 Kirim", "➕ Kirim qo'shish", "💰 Доход", "➕ Доход"}))
+@router.message(F.text.in_({"💰 Kirim", "➕ Kirim qo'shish", "💰 Доход", "➕ Доход"}), StateFilter("*"))
 async def start_income(message: Message, state: FSMContext):
-    """Kirim / Доход tugmasi bosilganda"""
+    """Kirim / Доход tugmasi bosilganda (har qanday holatda darhol ishlaydi)"""
     await state.clear()
     await state.update_data(tr_type="income")
     await state.set_state(TransactionState.waiting_input)
@@ -50,9 +41,9 @@ async def start_income(message: Message, state: FSMContext):
     )
 
 
-@router.message(F.text.in_({"💳 Chiqim", "➖ Chiqim qo'shish", "💳 Расход", "➖ Расход"}))
+@router.message(F.text.in_({"💳 Chiqim", "➖ Chiqim qo'shish", "💳 Расход", "➖ Расход"}), StateFilter("*"))
 async def start_expense(message: Message, state: FSMContext):
-    """Chiqim / Расход tugmasi bosilganda"""
+    """Chiqim / Расход tugmasi bosilganda (har qanday holatda darhol ishlaydi)"""
     await state.clear()
     await state.update_data(tr_type="expense")
     await state.set_state(TransactionState.waiting_input)

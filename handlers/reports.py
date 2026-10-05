@@ -3,6 +3,7 @@ import calendar
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from aiogram.filters import StateFilter
 
 import database as db
 from keyboards import get_report_period_keyboard, get_main_keyboard
@@ -12,7 +13,7 @@ from locales import t, localize_category
 router = Router()
 
 
-@router.message(F.text.in_({"💰 Mening balansim", "💵 Mening balansim", "💰 Мой баланс"}))
+@router.message(F.text.in_({"💰 Mening balansim", "💵 Mening balansim", "💰 Мой баланс"}), StateFilter("*"))
 async def show_balance(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
@@ -49,7 +50,7 @@ async def show_balance(message: Message, state: FSMContext):
     await message.answer(text, reply_markup=get_main_keyboard(user_lang), parse_mode="HTML")
 
 
-@router.message(F.text.in_({"📊 Statistika & Hisobot", "📊 Statistika", "📊 Статистика и отчёты", "📊 Статистика"}))
+@router.message(F.text.in_({"📊 Statistika & Hisobot", "📊 Statistika", "📊 Статистика и отчёты", "📊 Статистика"}), StateFilter("*"))
 async def select_report_period(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id

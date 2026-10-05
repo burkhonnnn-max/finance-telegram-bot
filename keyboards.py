@@ -9,8 +9,18 @@ from locales import (
     EXPENSE_CATEGORIES_UZ,
     EXPENSE_CATEGORIES_RU,
     INCOME_CATEGORIES_UZ,
-    INCOME_CATEGORIES_RU,
 )
+
+MENU_BUTTONS = {
+    "💰 Kirim", "💳 Chiqim", "➕ Kirim qo'shish", "➖ Chiqim qo'shish",
+    "💰 Доход", "💳 Расход", "➕ Доход", "➖ Расход",
+    "📊 Statistika & Hisobot", "📊 Statistika", "📊 Статистика и отчёты", "📊 Статистика",
+    "💰 Mening balansim", "💵 Mening balansim", "💰 Мой баланс",
+    "🕒 Oxirgi amallar", "🕒 История операций",
+    "ℹ️ Qanday ishlatiladi?", "ℹ️ Yordam", "ℹ️ Помощь",
+    "🌐 Til / Язык",
+    "❌ Bekor qilish", "❌ Отмена"
+}
 
 # 1. Tilni tanlash inline klaviaturasi
 def get_language_keyboard() -> InlineKeyboardMarkup:

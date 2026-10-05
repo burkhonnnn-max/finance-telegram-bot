@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
@@ -10,7 +10,7 @@ from locales import t
 router = Router()
 
 
-@router.message(CommandStart())
+@router.message(CommandStart(), StateFilter("*"))
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     user = message.from_user
@@ -63,11 +63,11 @@ async def process_language_choice(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.message(F.text.in_({"🌐 Til / Язык", "/lang", "/language"}))
-@router.message(Command("language"))
-@router.message(Command("lang"))
+@router.message(F.text.in_({"🌐 Til / Язык", "/lang", "/language"}), StateFilter("*"))
+@router.message(Command("language"), StateFilter("*"))
+@router.message(Command("lang"), StateFilter("*"))
 async def cmd_change_language(message: Message, state: FSMContext):
-    """Tilni o'zgartirish tugmasi"""
+    """Tilni o'zgartirish tugmasi (har qanday holatda darhol ishlaydi)"""
     await state.clear()
     user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
     await message.answer(
@@ -77,7 +77,7 @@ async def cmd_change_language(message: Message, state: FSMContext):
     )
 
 
-@router.message(Command("restart"))
+@router.message(Command("restart"), StateFilter("*"))
 async def cmd_restart(message: Message, state: FSMContext):
     """Bot holatini tozalash va qayta ishga tushirish buyrug'i"""
     await state.clear()
@@ -96,16 +96,17 @@ async def cmd_restart(message: Message, state: FSMContext):
     )
 
 
-@router.message(F.text.in_({"ℹ️ Qanday ishlatiladi?", "ℹ️ Yordam", "ℹ️ Помощь"}))
-@router.message(Command("help"))
-async def cmd_help(message: Message):
+@router.message(F.text.in_({"ℹ️ Qanday ishlatiladi?", "ℹ️ Yordam", "ℹ️ Помощь"}), StateFilter("*"))
+@router.message(Command("help"), StateFilter("*"))
+async def cmd_help(message: Message, state: FSMContext):
+    await state.clear()
     user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
     help_text = t("help_text", user_lang)
     await message.answer(help_text, reply_markup=get_main_keyboard(user_lang), parse_mode="HTML")
 
 
-@router.message(F.text.in_({"❌ Bekor qilish", "❌ Отмена"}))
-@router.message(Command("cancel"))
+@router.message(F.text.in_({"❌ Bekor qilish", "❌ Отмена"}), StateFilter("*"))
+@router.message(Command("cancel"), StateFilter("*"))
 async def cmd_cancel(message: Message, state: FSMContext):
     await state.clear()
     user_lang = (await db.get_user_language(message.from_user.id)) or "uz"

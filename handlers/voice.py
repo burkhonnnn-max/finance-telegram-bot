@@ -13,6 +13,7 @@ from keyboards import (
     get_confirm_keyboard,
     get_fix_keyboard,
     get_type_keyboard,
+    MENU_BUTTONS,
 )
 import pending_manager as pm
 from locales import t, localize_category
@@ -47,8 +48,8 @@ async def handle_voice_message(message: Message, state: FSMContext):
         await message.bot.download_file(file.file_path, destination=audio_stream)
         audio_bytes = audio_stream.getvalue()
 
-        # Ovozni ko'p tilli tahlil qilish
-        result = await process_voice_audio(audio_bytes, forced_type=preselected_type)
+        # Ovozni ko'p tilli tahlil qilish (user_lang e'tiborga olinadi)
+        result = await process_voice_audio(audio_bytes, forced_type=preselected_type, user_lang=user_lang)
 
         if not result.get("success"):
             if result.get("error_type") == "no_speech":
@@ -160,6 +161,10 @@ async def process_done_callback(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(response, parse_mode="HTML")
     await callback.answer("✅")
 
+    # Quyi menyuni avtomatik yangilash
+    menu_prompt = "👇 " + ("Выберите действие:" if user_lang == "ru" else "Kerakli bo'limni tanlang:")
+    await callback.message.answer(menu_prompt, reply_markup=get_main_keyboard(user_lang))
+
 
 @router.callback_query(F.data.startswith("pfix_"))
 async def process_fix_callback(callback: CallbackQuery, state: FSMContext):
@@ -198,6 +203,10 @@ async def process_cancel_callback(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(f"❌ <b>{t('cancelled', user_lang)}</b>", parse_mode="HTML")
     await callback.answer()
 
+    # Quyi menyuni avtomatik yangilash
+    menu_prompt = "👇 " + ("Выберите действие:" if user_lang == "ru" else "Kerakli bo'limni tanlang:")
+    await callback.message.answer(menu_prompt, reply_markup=get_main_keyboard(user_lang))
+
 
 # ----- 1. Summani o'zgartirish -----
 @router.callback_query(F.data.startswith("pedit_amt_"))
@@ -224,6 +233,11 @@ async def process_edit_amount_click(callback: CallbackQuery, state: FSMContext):
 async def process_new_amount_input(message: Message, state: FSMContext):
     user_id = message.from_user.id
     user_lang = (await db.get_user_language(user_id)) or "uz"
+
+    # Agar menyu tugmasi bosilgan bo'lsa holatni tozalash
+    if message.text in MENU_BUTTONS:
+        await state.clear()
+        return
 
     if message.text in ("❌ Bekor qilish", "❌ Отмена"):
         await state.clear()
@@ -344,6 +358,11 @@ async def process_edit_comment_click(callback: CallbackQuery, state: FSMContext)
 async def process_new_comment_input(message: Message, state: FSMContext):
     user_id = message.from_user.id
     user_lang = (await db.get_user_language(user_id)) or "uz"
+
+    # Agar menyu tugmasi bosilgan bo'lsa holatni tozalash
+    if message.text in MENU_BUTTONS:
+        await state.clear()
+        return
 
     if message.text in ("❌ Bekor qilish", "❌ Отмена"):
         await state.clear()

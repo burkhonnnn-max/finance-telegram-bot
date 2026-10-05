@@ -78,10 +78,10 @@ def main():
 
     # Routerlarni ulash
     dp.include_router(common.router)
-    dp.include_router(voice.router)
     dp.include_router(reports.router)
     dp.include_router(history.router)
     dp.include_router(transactions.router)
+    dp.include_router(voice.router)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

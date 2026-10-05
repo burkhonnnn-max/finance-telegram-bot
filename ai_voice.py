@@ -63,8 +63,12 @@ def convert_ogg_to_wav(ogg_bytes: bytes) -> bytes:
                 pass
 
 
-def transcribe_audio_free(wav_bytes: bytes) -> Optional[str]:
-    """Bepul Google Speech Recognition orqali ko'p tilli (o'zbek va rus) nutqni matnga aylantirish"""
+def transcribe_audio_free(wav_bytes: bytes, user_lang: str = "uz") -> Optional[str]:
+    """
+    Bepul Google Speech Recognition orqali ko'p tilli (o'zbek va rus) nutqni matnga aylantirish.
+    Foydalanuvchi qaysi tilni tanlaganidan qat'i nazar (rus yoki o'zbek), har ikkala tilda
+    nutq tekshiriladi va eng aniq moliyaviy ma'lumot (summa + toifa) topilgan variant tanlanadi.
+    """
     recognizer = sr.Recognizer()
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_file:
         wav_file.write(wav_bytes)
@@ -75,31 +79,44 @@ def transcribe_audio_free(wav_bytes: bytes) -> Optional[str]:
             recognizer.adjust_for_ambient_noise(source, duration=0.2)
             audio_data = recognizer.record(source)
 
-            # 1. O'zbek tilida sinash
-            try:
-                text = recognizer.recognize_google(audio_data, language="uz-UZ")
-                if text:
-                    return text
-            except (sr.UnknownValueError, sr.RequestError):
-                pass
+            # Foydalanuvchi tanlagan til bo'yicha ketma-ketlik
+            primary_lang = "ru-RU" if user_lang == "ru" else "uz-UZ"
+            secondary_lang = "uz-UZ" if user_lang == "ru" else "ru-RU"
 
-            # 2. Rus tilida sinash
-            try:
-                text = recognizer.recognize_google(audio_data, language="ru-RU")
-                if text:
-                    return text
-            except (sr.UnknownValueError, sr.RequestError):
-                pass
+            candidates = []
 
-            # 3. Ingliz / aralash
-            try:
-                text = recognizer.recognize_google(audio_data, language="en-US")
-                if text:
-                    return text
-            except (sr.UnknownValueError, sr.RequestError):
-                pass
+            for l_code in [primary_lang, secondary_lang]:
+                try:
+                    text = recognizer.recognize_google(audio_data, language=l_code)
+                    if text and text.strip():
+                        p = parse_financial_intent(text)
+                        score = 0
+                        if p.get("is_finance"):
+                            score += 10
+                        if p.get("amount") and p["amount"] > 0:
+                            score += 10
+                        if p.get("category") and "boshqa" not in p["category"].lower() and "другие" not in p["category"].lower():
+                            score += 5
+                        candidates.append((score, text))
+                        # Agar birinchi tildayoq to'liq ma'lumot (summa + toifa) topilsa
+                        if score >= 25:
+                            return text
+                except (sr.UnknownValueError, sr.RequestError):
+                    continue
 
-            return None
+            if not candidates:
+                # Ingliz / aralash sinash
+                try:
+                    text = recognizer.recognize_google(audio_data, language="en-US")
+                    if text and text.strip():
+                        return text
+                except (sr.UnknownValueError, sr.RequestError):
+                    pass
+                return None
+
+            # Eng yuqori moliyaviy ball to'plagan variantni tanlash
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return candidates[0][1]
     except Exception as e:
         logger.error(f"Free speech recognition error: {e}")
         return None
@@ -300,7 +317,7 @@ def parse_financial_intent(transcript: str, forced_type: Optional[str] = None) -
     }
 
 
-async def process_voice_audio(audio_bytes: bytes, forced_type: Optional[str] = None) -> Dict[str, Any]:
+async def process_voice_audio(audio_bytes: bytes, forced_type: Optional[str] = None, user_lang: str = "uz") -> Dict[str, Any]:
     """
     Ovozli xabarni ko'p tilli (o'zbek va rus) tahlil qilish
     """
@@ -347,8 +364,8 @@ async def process_voice_audio(audio_bytes: bytes, forced_type: Optional[str] = N
     try:
         logger.info(f"Ovoz qabul qilindi ({len(audio_bytes)} bayt). WAV ga aylantirilmoqda...")
         wav_bytes = convert_ogg_to_wav(audio_bytes)
-        logger.info(f"WAV ga aylantirildi ({len(wav_bytes)} bayt). Ko'p tilli nutq aniqlanmoqda...")
-        transcript = transcribe_audio_free(wav_bytes)
+        logger.info(f"WAV ga aylantirildi ({len(wav_bytes)} bayt). Ko'p tilli nutq aniqlanmoqda (user_lang={user_lang})...")
+        transcript = transcribe_audio_free(wav_bytes, user_lang=user_lang)
 
         if not transcript:
             logger.warning("Ovozdan hech qanday so'z tanib olinmadi.")

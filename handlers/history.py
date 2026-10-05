@@ -1,6 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
+from aiogram.filters import StateFilter
 
 import database as db
 from keyboards import get_main_keyboard
@@ -10,7 +11,7 @@ from locales import t, localize_category
 router = Router()
 
 
-@router.message(F.text.in_({"🕒 Oxirgi amallar", "🕒 История операций"}))
+@router.message(F.text.in_({"🕒 Oxirgi amallar", "🕒 История операций"}), StateFilter("*"))
 async def show_recent_history(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
