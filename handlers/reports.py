@@ -11,7 +11,7 @@ from utils import format_money, generate_progress_bar
 router = Router()
 
 
-@router.message(F.text == "💰 Mening balansim")
+@router.message(F.text.in_({"💰 Mening balansim", "💵 Mening balansim"}))
 async def show_balance(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id

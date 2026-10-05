@@ -41,9 +41,15 @@ def convert_ogg_to_wav(ogg_bytes: bytes) -> bytes:
             return f.read()
     finally:
         if os.path.exists(ogg_path):
-            os.remove(ogg_path)
+            try:
+                os.remove(ogg_path)
+            except OSError:
+                pass
         if os.path.exists(wav_path):
-            os.remove(wav_path)
+            try:
+                os.remove(wav_path)
+            except OSError:
+                pass
 
 
 def transcribe_audio_free(wav_bytes: bytes) -> Optional[str]:
@@ -55,24 +61,50 @@ def transcribe_audio_free(wav_bytes: bytes) -> Optional[str]:
 
     try:
         with sr.AudioFile(wav_path) as source:
+            recognizer.adjust_for_ambient_noise(source, duration=0.2)
             audio_data = recognizer.record(source)
-            # Avval o'zbek tilida sinab ko'ramiz
+
+            # 1. Avval o'zbek tilida sinab ko'ramiz
             try:
                 text = recognizer.recognize_google(audio_data, language="uz-UZ")
-                return text
-            except sr.UnknownValueError:
-                # Agar o'zbekchada tushunmasa rus tilida sinaymiz
-                return recognizer.recognize_google(audio_data, language="ru-RU")
+                if text:
+                    return text
+            except (sr.UnknownValueError, sr.RequestError):
+                pass
+
+            # 2. Agar o'zbekchada tushunmasa rus tilida sinaymiz
+            try:
+                text = recognizer.recognize_google(audio_data, language="ru-RU")
+                if text:
+                    return text
+            except (sr.UnknownValueError, sr.RequestError):
+                pass
+
+            # 3. Ingliz tilida
+            try:
+                text = recognizer.recognize_google(audio_data, language="en-US")
+                if text:
+                    return text
+            except (sr.UnknownValueError, sr.RequestError):
+                pass
+
+            return None
     except Exception as e:
         logger.error(f"Free speech recognition error: {e}")
         return None
     finally:
         if os.path.exists(wav_path):
-            os.remove(wav_path)
+            try:
+                os.remove(wav_path)
+            except OSError:
+                pass
 
 
 def extract_number_from_text(text: str) -> Optional[float]:
     """Matndan summani aniqlash (raqamlar yoki so'zlar orqali)"""
+    if not text:
+        return None
+
     # 1. 35 000 kabi probelli sonlarni birlashtirish
     cleaned = re.sub(r'(\d+)\s+(\d{3})', r'\1\2', text)
 
@@ -127,8 +159,8 @@ def extract_number_from_text(text: str) -> Optional[float]:
     return total if found and total > 0 else None
 
 
-def parse_financial_intent(transcript: str) -> Dict[str, Any]:
-    """Ovozdan olingan matndan moliyaviy ma'lumotlarni ajratib olish"""
+def parse_financial_intent(transcript: str, forced_type: Optional[str] = None) -> Dict[str, Any]:
+    """Matn yoki ovozdan moliyaviy ma'lumotlarni ajratib olish"""
     amount = extract_number_from_text(transcript)
     if not amount or amount <= 0:
         return {
@@ -145,8 +177,12 @@ def parse_financial_intent(transcript: str) -> Dict[str, Any]:
         "topdim", "berishdi", "keldi", "qarz qaytdi", "qarzini berdi",
         "savdo", "foyda", "mukofot", "premiya", "zarplata"
     ]
-    is_income = any(w in low for w in income_words)
-    tr_type = "income" if is_income else "expense"
+
+    if forced_type in ("income", "expense"):
+        tr_type = forced_type
+    else:
+        is_income = any(w in low for w in income_words)
+        tr_type = "income" if is_income else "expense"
 
     # Toifalarni aniqlash
     category = "📦 Boshqa chiqim" if tr_type == "expense" else "📦 Boshqa kirim"
@@ -195,27 +231,28 @@ def parse_financial_intent(transcript: str) -> Dict[str, Any]:
     }
 
 
-async def process_voice_audio(audio_bytes: bytes) -> Dict[str, Any]:
+async def process_voice_audio(audio_bytes: bytes, forced_type: Optional[str] = None) -> Dict[str, Any]:
     """
     Ovozli xabarni tahlil qilish:
     1. Agar GEMINI_API_KEY bo'lsa, Gemini AI orqali.
-    2. Agar bo'lmasa, mutlaqo bepul Google Speech Recognition + ichki tahlilchi orqali!
+    2. Agar bo'lmasa, Google Speech Recognition + o'zbekcha parser orqali.
     """
     # 1. Agar Gemini AI kaliti berilgan bo'lsa
     if GEMINI_API_KEY:
         try:
             from google import genai
             from google.genai import types
-            
+
             client = genai.Client(api_key=GEMINI_API_KEY)
+            type_hint = f" Amaliyot turi: {forced_type}." if forced_type else ""
             response = await client.aio.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-2.0-flash",
                 contents=[
                     types.Part.from_bytes(
                         data=audio_bytes,
                         mime_type="audio/ogg"
                     ),
-                    "Ushbu audio xabarda aytilgan moliyaviy ma'lumotni (kirim yoki chiqim) aniqlab, faqat quyidagi JSON formatida qaytar:\n"
+                    f"Ushbu audio xabarda aytilgan moliyaviy ma'lumotni (kirim yoki chiqim) aniqlab, faqat quyidagi JSON formatida qaytar.{type_hint}\n"
                     "{\n"
                     '  "is_finance": true,\n'
                     '  "type": "expense" yoki "income",\n'
@@ -232,15 +269,17 @@ async def process_voice_audio(audio_bytes: bytes) -> Dict[str, Any]:
                 )
             )
             data = json.loads(response.text.strip())
+            if forced_type in ("income", "expense"):
+                data["type"] = forced_type
             return {"success": True, "data": data}
         except Exception as e:
             logger.warning(f"Gemini API xatoligi, bepul vositaga o'tilmoqda: {e}")
 
-    # 2. Bepul Speech Recognition + O'zbekcha parser (API kalitsiz ishlaydi!)
+    # 2. Bepul Speech Recognition + O'zbekcha parser
     try:
         logger.info(f"Ovoz qabul qilindi ({len(audio_bytes)} bayt). WAV ga aylantirilmoqda...")
         wav_bytes = convert_ogg_to_wav(audio_bytes)
-        logger.info(f"WAV ga aylantirildi ({len(wav_bytes)} bayt). Google Speech Recognition ga yuborilmoqda...")
+        logger.info(f"WAV ga aylantirildi ({len(wav_bytes)} bayt). Nutq aniqlanmoqda...")
         transcript = transcribe_audio_free(wav_bytes)
 
         if not transcript:
@@ -252,7 +291,7 @@ async def process_voice_audio(audio_bytes: bytes) -> Dict[str, Any]:
             }
 
         logger.info(f"Eshitilgan matn: '{transcript}'. Moliyaviy tahlil qilinmoqda...")
-        parsed = parse_financial_intent(transcript)
+        parsed = parse_financial_intent(transcript, forced_type=forced_type)
         logger.info(f"Tahlil natijasi: {parsed}")
         return {
             "success": True,
@@ -267,10 +306,9 @@ async def process_voice_audio(audio_bytes: bytes) -> Dict[str, Any]:
             "message": f"Audio xatolik: {err_msg}"
         }
     except Exception as e:
-        logger.error(f"Ovozni bepul tahlil qilishda xatolik: {e}", exc_info=True)
+        logger.error(f"Ovozni tahlil qilishda xatolik: {e}", exc_info=True)
         return {
             "success": False,
             "error_type": "processing_error",
             "message": str(e)
         }
-
