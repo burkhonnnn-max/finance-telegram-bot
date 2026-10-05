@@ -289,3 +289,20 @@ async def mark_monthly_report_sent(year_month: str, users_count: int):
                 users_count = excluded.users_count
         """, (year_month, users_count))
         await db.commit()
+
+
+async def delete_month_transactions(user_id: int, year: int, month: int) -> int:
+    """Foydalanuvchining muayyan oydagi barcha amallarini o'chirish (0 dan boshlash)"""
+    import calendar
+    _, last_day = calendar.monthrange(year, month)
+    start_date = f"{year}-{month:02d}-01 00:00:00"
+    end_date = f"{year}-{month:02d}-{last_day:02d} 23:59:59"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            DELETE FROM transactions
+            WHERE user_id = ? AND created_at >= ? AND created_at <= ?
+        """, (user_id, start_date, end_date))
+        await db.commit()
+        return cursor.rowcount
+

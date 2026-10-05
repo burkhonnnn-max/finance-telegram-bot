@@ -2,13 +2,14 @@ import re
 from typing import Optional, Tuple, Dict, Any
 
 
-def format_money(amount: float) -> str:
-    """Summani chiroyli probellar bilan formatlash (masalan: 120 000 so'm)"""
+def format_money(amount: float, lang: str = "uz") -> str:
+    """Summani chiroyli probellar bilan formatlash (masalan: 120 000 so'm yoki 120 000 сум)"""
     if amount == int(amount):
         formatted = f"{int(amount):,}".replace(",", " ")
     else:
         formatted = f"{amount:,.2f}".replace(",", " ")
-    return f"{formatted} so'm"
+    curr = "сум" if lang == "ru" else "so'm"
+    return f"{formatted} {curr}"
 
 
 def parse_amount(text: str) -> Optional[float]:
