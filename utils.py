@@ -92,3 +92,15 @@ def generate_progress_bar(percentage: float, length: int = 8) -> str:
     filled_len = max(0, min(length, filled_len))
     bar = "■" * filled_len + "□" * (length - filled_len)
     return bar
+
+
+def get_tashkent_now():
+    """Toshkent vaqti bo'yicha joriy vaqtni olish (UTC+5)"""
+    from datetime import datetime
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Asia/Tashkent"))
+    except Exception:
+        from datetime import timezone, timedelta
+        return datetime.now(timezone(timedelta(hours=5)))
+

@@ -7,7 +7,7 @@ from aiogram.filters import StateFilter
 
 import database as db
 from keyboards import get_report_period_keyboard, get_main_keyboard
-from utils import format_money, generate_progress_bar
+from utils import format_money, generate_progress_bar, get_tashkent_now
 from locales import t, localize_category
 
 router = Router()
@@ -68,7 +68,7 @@ async def process_report_period(callback: CallbackQuery):
     user_id = callback.from_user.id
     user_lang = (await db.get_user_language(user_id)) or "uz"
     action = callback.data
-    now = datetime.now()
+    now = get_tashkent_now()
 
     title = ""
     start_date = ""
@@ -173,7 +173,7 @@ async def handle_excel_callback(callback: CallbackQuery):
     user_id = callback.from_user.id
     user_name = callback.from_user.full_name or "Foydalanuvchi"
     user_lang = (await db.get_user_language(user_id)) or "uz"
-    now = datetime.now()
+    now = get_tashkent_now()
 
     wait_msg = "⏳ Excel fayl tayyorlanmoqda, kuting..." if user_lang != "ru" else "⏳ Формируется файл Excel, подождите..."
     await callback.answer(wait_msg)
@@ -196,7 +196,7 @@ async def handle_excel_command(message: Message, state: FSMContext):
     user_id = message.from_user.id
     user_name = message.from_user.full_name or "Foydalanuvchi"
     user_lang = (await db.get_user_language(user_id)) or "uz"
-    now = datetime.now()
+    now = get_tashkent_now()
 
     wait_text = "⏳ <b>Excel hisobot tayyorlanmoqda...</b>" if user_lang != "ru" else "⏳ <b>Формируется отчёт в Excel...</b>"
     temp_msg = await message.answer(wait_text, parse_mode="HTML")

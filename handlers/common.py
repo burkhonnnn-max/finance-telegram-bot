@@ -123,3 +123,22 @@ async def callback_cancel(callback: CallbackQuery, state: FSMContext):
         pass
     await callback.message.answer(t("cancelled", user_lang), reply_markup=get_main_keyboard(user_lang))
     await callback.answer()
+
+
+@router.message(Command("backup"), StateFilter("*"))
+async def cmd_backup(message: Message, state: FSMContext):
+    await state.clear()
+    import os
+    from aiogram.types import FSInputFile
+    from config import DB_PATH
+
+    if os.path.exists(DB_PATH):
+        doc = FSInputFile(DB_PATH, filename="finance_bot.db")
+        await message.answer_document(
+            doc,
+            caption="💾 <b>Ma'lumotlar bazasining zaxira nusxasi (Backup)</b>",
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer("Baza fayli topilmadi.")
+

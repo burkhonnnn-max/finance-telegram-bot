@@ -10,10 +10,6 @@ __pycache__/
 venv/
 ENV/
 
-# Ma'lumotlar bazasi
-*.db
-*.sqlite3
-
 # Tizim fayllari
 .DS_Store
 Thumbs.db

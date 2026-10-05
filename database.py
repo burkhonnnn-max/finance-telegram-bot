@@ -95,7 +95,8 @@ async def add_transaction(
 ) -> int:
     """Yangi kirim yoki chiqim yozuvini qo'shish"""
     if created_at is None:
-        created_at = datetime.now()
+        from utils import get_tashkent_now
+        created_at = get_tashkent_now()
     created_str = created_at.strftime("%Y-%m-%d %H:%M:%S")
 
     async with aiosqlite.connect(DB_PATH) as db:
