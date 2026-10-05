@@ -30,7 +30,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 WEBHOOK_PATH = "/webhook"
-BASE_WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+BASE_WEBHOOK_URL = (os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBHOOK_URL") or "").rstrip("/")
 
 
 async def set_bot_commands(bot: Bot):
@@ -45,7 +45,11 @@ async def set_bot_commands(bot: Bot):
 
 
 async def handle_health(request):
-    return web.Response(text="OK - Finance Bot is alive and healthy!")
+    return web.json_response({
+        "status": "ok",
+        "service": "finance-telegram-bot",
+        "webhook_url": f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}" if BASE_WEBHOOK_URL else "polling"
+    })
 
 
 async def on_startup(bot: Bot):
@@ -54,15 +58,18 @@ async def on_startup(bot: Bot):
     if BASE_WEBHOOK_URL:
         webhook_url = f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}"
         logger.info(f"Webhook o'rnatilmoqda: {webhook_url}")
-        await bot.set_webhook(webhook_url, drop_pending_updates=True)
+        await bot.set_webhook(
+            url=webhook_url,
+            drop_pending_updates=False,
+            allowed_updates=["message", "callback_query"]
+        )
         logger.info("Webhook muvaffaqiyatli o'rnatildi!")
 
 
 async def on_shutdown(bot: Bot):
-    if BASE_WEBHOOK_URL:
-        logger.info("Webhook o'chirilmoqda...")
-        await bot.delete_webhook()
-        logger.info("Webhook o'chirildi.")
+    # Webhookni o'chirmaymiz, chunki server uyquga ketganida
+    # yangi xabar kelishi bilan Render serverni avtomatik uyg'otishi kerak.
+    logger.info("Bot serveri to'xtatildi (Webhook faol saqlab qolindi).")
 
 
 def main():
