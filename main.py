@@ -11,7 +11,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 
 from config import BOT_TOKEN
 import database as db
-from handlers import common, voice, transactions, reports, history
+from handlers import common, voice, transactions, reports, history, quick
 
 # Windows konsoli uchun UTF-8 kodlashni yoqish
 if sys.platform == "win32":
@@ -36,6 +36,7 @@ BASE_WEBHOOK_URL = (os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBHOOK_URL")
 async def set_bot_commands(bot: Bot):
     commands = [
         BotCommand(command="start", description="Botni ishga tushirish / Запустить"),
+        BotCommand(command="auto", description="Avto amallar / Быстрые операции"),
         BotCommand(command="history", description="Oylik amallar va o'chirish / История операций"),
         BotCommand(command="reset_month", description="Oyni 0 dan boshlash / Очистить месяц"),
         BotCommand(command="excel", description="Oylik Excel hisobot / Скачать Excel-отчет"),
@@ -96,6 +97,7 @@ def main():
 
     # Routerlarni ulash
     dp.include_router(common.router)
+    dp.include_router(quick.router)
     dp.include_router(reports.router)
     dp.include_router(history.router)
     dp.include_router(transactions.router)

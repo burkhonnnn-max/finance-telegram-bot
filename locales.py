@@ -185,8 +185,10 @@ MESSAGES = {
             "<b>3. Tezkor yozuv:</b>\n"
             "• <code>-15000 tushlik</code> yoki <code>-20k taxi</code>\n"
             "• <code>+500000 oylik</code> yoki <code>+100k frilans</code>\n\n"
-            "<b>4. Tilni o'zgartirish:</b>\n"
-            "• <b>🌐 Til / Язык</b> tugmasi orqali istalgan vaqtda tilni almashtiring."
+            "<b>4. ⚡ Avto (Tezkor saqlangan amallar):</b>\n"
+            "• Har kuni takrorlanadigan to'lovlaringizni (masalan: <i>Avtobus 2500, Non 4000</i>) bir marta saqlab qo'ying va bitta tugmani bosish orqali hisobingizdan yeching!\n\n"
+            "<b>5. Tilni o'zgartirish:</b>\n"
+            "• /lang yoki /language buyrug'i orqali istalgan vaqtda tilni almashtiring."
         ),
     },
     "ru": {
@@ -287,8 +289,10 @@ MESSAGES = {
             "<b>3. Быстрая запись:</b>\n"
             "• <code>-15000 обед</code> или <code>-20k такси</code>\n"
             "• <code>+500000 зарплата</code> или <code>+100k фриланс</code>\n\n"
-            "<b>4. Смена языка:</b>\n"
-            "• Кнопка <b>🌐 Til / Язык</b> внизу позволяет сменить язык в любой момент."
+            "<b>4. ⚡ Авто (Быстрые сохранённые операции):</b>\n"
+            "• Сохраните ежедневные частые расходы (например: <i>Автобус 2500, Хлеб 4000</i>) и списывайте их одним нажатием кнопки!\n\n"
+            "<b>5. Смена языка:</b>\n"
+            "• Команда /lang или /language позволяет сменить язык в любой момент."
         ),
     }
 }

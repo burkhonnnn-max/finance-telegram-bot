@@ -18,6 +18,7 @@ MENU_BUTTONS = {
     "💰 Mening balansim", "💵 Mening balansim", "💰 Мой баланс",
     "🕒 Oxirgi amallar", "🕒 История операций",
     "ℹ️ Qanday ishlatiladi?", "ℹ️ Yordam", "ℹ️ Помощь",
+    "⚡ Avto", "⚡ Авто", "Avto", "Авто",
     "🌐 Til / Язык",
     "❌ Bekor qilish", "❌ Отмена"
 }
@@ -36,6 +37,7 @@ def get_language_keyboard() -> InlineKeyboardMarkup:
 
 # 2. Asosiy doimiy menyu tugmalari (uz & ru)
 def get_main_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
+    is_ru = (lang == "ru")
     keyboard = [
         [
             KeyboardButton(text=t("btn_income", lang)),
@@ -50,7 +52,7 @@ def get_main_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
             KeyboardButton(text=t("btn_help", lang))
         ],
         [
-            KeyboardButton(text="🌐 Til / Язык")
+            KeyboardButton(text="⚡ Avto" if not is_ru else "⚡ Авто")
         ]
     ]
     return ReplyKeyboardMarkup(
@@ -196,3 +198,110 @@ def get_type_keyboard(pending_id: str, lang: str = "uz") -> InlineKeyboardMarkup
             ]
         ]
     )
+
+
+# =========================================================================
+# 10. AVTO / TEZKOR SAQLANGAN AMALLAR KLAVIATURALARI
+# =========================================================================
+
+def get_template_emoji(name: str, tr_type: str = "expense") -> str:
+    """Nomi bo'yicha mos keladigan emojini tanlash"""
+    low = (name or "").lower()
+    if any(w in low for w in ["avtobus", "автобус", "marshrutka", "маршрутка"]):
+        return "🚌"
+    if any(w in low for w in ["taxi", "taksi", "такси", "yandex"]):
+        return "🚕"
+    if any(w in low for w in ["metro", "метро"]):
+        return "🚇"
+    if any(w in low for w in ["benzin", "zapravka", "propan", "metan", "газ"]):
+        return "⛽️"
+    if any(w in low for w in ["non", "хлеб", "lepyoshka", "patir"]):
+        return "🥖"
+    if any(w in low for w in ["kofe", "coffee", "кофе"]):
+        return "☕️"
+    if any(w in low for w in ["choy", "чай"]):
+        return "🫖"
+    if any(w in low for w in ["suv", "вода"]):
+        return "💧"
+    if any(w in low for w in ["tushlik", "ovqat", "osh", "somsa", "lavash", "doner", "еда", "обед"]):
+        return "🍽"
+    if any(w in low for w in ["sigaret", "сигареты"]):
+        return "🚬"
+    if any(w in low for w in ["paynet", "telefon", "internet", "интернет"]):
+        return "📱"
+    if any(w in low for w in ["dori", "apteka", "аптека"]):
+        return "💊"
+    return "🔴" if tr_type == "expense" else "🟢"
+
+
+def get_quick_templates_keyboard(templates: list, lang: str = "uz") -> InlineKeyboardMarkup:
+    """Foydalanuvchining saqlangan tezkor amallari ro'yxati va boshqaruvi"""
+    from utils import format_money
+    is_ru = (lang == "ru")
+    rows = []
+
+    # 1. Shablon tugmalari
+    tpl_buttons = []
+    for tpl in templates:
+        emoji = get_template_emoji(tpl.get("name", ""), tpl.get("type", "expense"))
+        amt_str = format_money(tpl.get("amount", 0), lang=lang)
+        name = tpl.get("name", "Amal")
+        btn_text = f"{emoji} {name} ({amt_str})"
+        tpl_buttons.append(InlineKeyboardButton(text=btn_text, callback_data=f"quick_run_{tpl['id']}"))
+
+    # Tugmalarni tartiblash: agar uzun bo'lsa 1 tadan, qisqa bo'lsa 2 tadan
+    current_row = []
+    for btn in tpl_buttons:
+        if len(btn.text) > 22 or len(current_row) == 2:
+            if current_row:
+                rows.append(current_row)
+                current_row = []
+        current_row.append(btn)
+        if len(current_row) == 2:
+            rows.append(current_row)
+            current_row = []
+    if current_row:
+        rows.append(current_row)
+
+    # 2. Yangi qo'shish va boshqarish tugmalari
+    add_text = "➕ Yangi qo'shish" if not is_ru else "➕ Добавить"
+    manage_text = "⚙️ O'chirish" if not is_ru else "⚙️ Удалить"
+    close_text = "❌ Yopish" if not is_ru else "❌ Закрыть"
+
+    if templates:
+        rows.append([
+            InlineKeyboardButton(text=add_text, callback_data="quick_add_new"),
+            InlineKeyboardButton(text=manage_text, callback_data="quick_manage")
+        ])
+    else:
+        add_first = "➕ Yangi amal qo'shish" if not is_ru else "➕ Добавить операцию"
+        rows.append([InlineKeyboardButton(text=add_first, callback_data="quick_add_new")])
+
+    rows.append([InlineKeyboardButton(text=close_text, callback_data="quick_close")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_quick_manage_keyboard(templates: list, lang: str = "uz") -> InlineKeyboardMarkup:
+    """Saqlangan amallarni bittalab o'chirish klaviaturasi"""
+    from utils import format_money
+    is_ru = (lang == "ru")
+    rows = []
+
+    for tpl in templates:
+        emoji = get_template_emoji(tpl.get("name", ""), tpl.get("type", "expense"))
+        amt_str = format_money(tpl.get("amount", 0), lang=lang)
+        name = tpl.get("name", "Amal")
+        del_text = f"🗑 {emoji} {name} ({amt_str})"
+        rows.append([InlineKeyboardButton(text=del_text, callback_data=f"quick_del_{tpl['id']}")])
+
+    back_text = "⬅️ Ortga" if not is_ru else "⬅️ Назад"
+    rows.append([InlineKeyboardButton(text=back_text, callback_data="quick_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_quick_cancel_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    """Yangi amal qo'shishni bekor qilish tugmasi"""
+    cancel_text = "❌ Bekor qilish" if lang != "ru" else "❌ Отмена"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=cancel_text, callback_data="quick_cancel_add")]
+    ])

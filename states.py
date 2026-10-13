@@ -17,3 +17,9 @@ class PendingEditState(StatesGroup):
     """Vaqtinchalik tranzaksiyani to'g'rilash (Fix) holatlari"""
     edit_amount = State()    # Yangi summani kutish
     edit_comment = State()   # Yangi izohni kutish
+
+
+class QuickTemplateState(StatesGroup):
+    """Avto / Tezkor saqlangan amallar holatlari"""
+    waiting_title_or_quick = State()  # Nomi yoki "Nomi summa" bitta xabarda
+    waiting_amount = State()          # Faqat summani kutish

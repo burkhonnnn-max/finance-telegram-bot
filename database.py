@@ -61,6 +61,20 @@ async def init_db():
                 users_count INTEGER DEFAULT 0
             )
         """)
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS quick_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                type TEXT NOT NULL DEFAULT 'expense',
+                category TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_quick_templates_user ON quick_templates (user_id)")
         await db.commit()
 
 
@@ -108,11 +122,12 @@ async def register_user(
 
 
 async def reset_all_database():
-    """Barcha ma'lumotlarni tozalash (foydalanuvchilar, tranzaksiyalar, hisobotlar)"""
+    """Barcha ma'lumotlarni tozalash (foydalanuvchilar, tranzaksiyalar, hisobotlar, shablonlar)"""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM transactions")
         await db.execute("DELETE FROM users")
         await db.execute("DELETE FROM sent_monthly_reports")
+        await db.execute("DELETE FROM quick_templates")
         await db.commit()
 
 
@@ -368,4 +383,62 @@ async def delete_month_transactions(user_id: int, year: int, month: int) -> int:
         """, (user_id, start_date, end_date))
         await db.commit()
         return cursor.rowcount
+
+
+async def get_quick_templates(user_id: int) -> List[Dict[str, Any]]:
+    """Foydalanuvchining saqlangan tezkor amallar (shablonlar) ro'yxati"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT id, user_id, name, amount, type, category, created_at
+            FROM quick_templates
+            WHERE user_id = ?
+            ORDER BY id ASC
+        """, (user_id,)) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def get_quick_template(template_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+    """Aynan bitta tezkor amalni olish"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT id, user_id, name, amount, type, category, created_at
+            FROM quick_templates
+            WHERE id = ? AND user_id = ?
+        """, (template_id, user_id)) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def add_quick_template(
+    user_id: int,
+    name: str,
+    amount: float,
+    tr_type: str = "expense",
+    category: Optional[str] = None
+) -> int:
+    """Yangi tezkor amal (shablon) qo'shish"""
+    if category is None:
+        category = "📦 Boshqa chiqim" if tr_type == "expense" else "📦 Boshqa kirim"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            INSERT INTO quick_templates (user_id, name, amount, type, category)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, name, amount, tr_type, category))
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def delete_quick_template(template_id: int, user_id: int) -> bool:
+    """Tezkor amalni o'chirish"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            DELETE FROM quick_templates
+            WHERE id = ? AND user_id = ?
+        """, (template_id, user_id))
+        await db.commit()
+        return cursor.rowcount > 0
 
