@@ -18,6 +18,16 @@ async def show_balance(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
     user_lang = (await db.get_user_language(user_id)) or "uz"
+
+    if not await db.is_user_registered(user_id):
+        msg = (
+            "⚠️ <b>Iltimos, avval ro'yxatdan o'ting!</b>\n\n/start buyrug'ini bosing va shaxsiy hisobingizni yarating."
+            if user_lang != "ru" else
+            "⚠️ <b>Пожалуйста, сначала зарегистрируйтесь!</b>\n\nОтправьте команду /start для создания аккаунта."
+        )
+        await message.answer(msg, parse_mode="HTML")
+        return
+
     balance_info = await db.get_balance(user_id)
 
     total_income = balance_info["income"]
@@ -30,20 +40,20 @@ async def show_balance(message: Message, state: FSMContext):
         text = (
             f"💳 <b>Ваш общий финансовый баланс:</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"🟢 <b>Всего доходов:</b> +{format_money(total_income)}\n"
-            f"🔴 <b>Всего расходов:</b> -{format_money(total_expense)}\n"
+            f"🟢 <b>Всего доходов:</b> +{format_money(total_income, lang=user_lang)}\n"
+            f"🔴 <b>Всего расходов:</b> -{format_money(total_expense, lang=user_lang)}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"{status_icon} <b>Чистые накопления:</b> <b>{format_money(current_balance)}</b>\n\n"
+            f"{status_icon} <b>Чистые накопления:</b> <b>{format_money(current_balance, lang=user_lang)}</b>\n\n"
             f"Для подробной аналитики перейдите в <b>'📊 Статистика и отчёты'</b>."
         )
     else:
         text = (
             f"💳 <b>Sizning umumiy moliyaviy balansingiz:</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"🟢 <b>Jami kirim:</b> +{format_money(total_income)}\n"
-            f"🔴 <b>Jami chiqim:</b> -{format_money(total_expense)}\n"
+            f"🟢 <b>Jami kirim:</b> +{format_money(total_income, lang=user_lang)}\n"
+            f"🔴 <b>Jami chiqim:</b> -{format_money(total_expense, lang=user_lang)}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"{status_icon} <b>Sof jamg'arma:</b> <b>{format_money(current_balance)}</b>\n\n"
+            f"{status_icon} <b>Sof jamg'arma:</b> <b>{format_money(current_balance, lang=user_lang)}</b>\n\n"
             f"Batafsil statistika ko'rish uchun <b>'📊 Statistika & Hisobot'</b> bo'limiga o'ting."
         )
 
@@ -55,6 +65,15 @@ async def select_report_period(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
     user_lang = (await db.get_user_language(user_id)) or "uz"
+
+    if not await db.is_user_registered(user_id):
+        msg = (
+            "⚠️ <b>Iltimos, avval ro'yxatdan o'ting!</b>\n\n/start buyrug'ini bosing va shaxsiy hisobingizni yarating."
+            if user_lang != "ru" else
+            "⚠️ <b>Пожалуйста, сначала зарегистрируйтесь!</b>\n\nОтправьте команду /start для создания аккаунта."
+        )
+        await message.answer(msg, parse_mode="HTML")
+        return
 
     await message.answer(
         t("report_prompt", user_lang),

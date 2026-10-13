@@ -12,15 +12,29 @@ async def init_db():
                 user_id INTEGER PRIMARY KEY,
                 full_name TEXT,
                 username TEXT,
+                phone_number TEXT,
                 currency TEXT DEFAULT 'so''m',
                 language TEXT DEFAULT NULL,
+                is_registered INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
-        # Til ustunini tekshirish va qo'shish (migratsiya)
+        # Ustunlarni tekshirish va qo'shish (migratsiya)
         try:
             await db.execute("ALTER TABLE users ADD COLUMN language TEXT DEFAULT NULL")
+            await db.commit()
+        except Exception:
+            pass
+
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT NULL")
+            await db.commit()
+        except Exception:
+            pass
+
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN is_registered INTEGER DEFAULT 0")
             await db.commit()
         except Exception:
             pass
@@ -47,6 +61,58 @@ async def init_db():
                 users_count INTEGER DEFAULT 0
             )
         """)
+        await db.commit()
+
+
+async def get_user(user_id: int) -> Optional[Dict[str, Any]]:
+    """Foydalanuvchi ma'lumotlarini olish"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def is_user_registered(user_id: int) -> bool:
+    """Foydalanuvchi to'liq ro'yxatdan o'tganligini tekshirish"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT is_registered, phone_number FROM users WHERE user_id = ?", (user_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row and row[0] and row[1]:
+                return True
+            return False
+
+
+async def register_user(
+    user_id: int,
+    full_name: str,
+    phone_number: str,
+    language: str,
+    username: Optional[str] = None
+):
+    """Foydalanuvchini to'liq ro'yxatdan o'tkazish"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO users (user_id, full_name, username, phone_number, language, is_registered)
+            VALUES (?, ?, ?, ?, ?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET
+                full_name = excluded.full_name,
+                username = excluded.username,
+                phone_number = excluded.phone_number,
+                language = excluded.language,
+                is_registered = 1
+        """, (user_id, full_name, username, phone_number, language))
+        await db.commit()
+
+
+async def reset_all_database():
+    """Barcha ma'lumotlarni tozalash (foydalanuvchilar, tranzaksiyalar, hisobotlar)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM transactions")
+        await db.execute("DELETE FROM users")
+        await db.execute("DELETE FROM sent_monthly_reports")
         await db.commit()
 
 
@@ -234,16 +300,13 @@ async def get_stats_for_period(user_id: int, start_date: str, end_date: str) -> 
 
 
 async def get_all_users() -> List[Dict[str, Any]]:
-    """Barcha faol foydalanuvchilar ro'yxatini olish"""
+    """Barcha ro'yxatdan o'tgan foydalanuvchilar ro'yxatini olish"""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("""
-            SELECT u.user_id, COALESCE(u.full_name, 'Foydalanuvchi') as full_name, u.language
-            FROM users u
-            UNION
-            SELECT DISTINCT t.user_id, 'Foydalanuvchi' as full_name, 'uz' as language
-            FROM transactions t
-            WHERE t.user_id NOT IN (SELECT user_id FROM users)
+            SELECT user_id, COALESCE(full_name, 'Foydalanuvchi') as full_name, language, phone_number
+            FROM users
+            WHERE is_registered = 1
         """) as cursor:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]

@@ -1,6 +1,11 @@
 from aiogram.fsm.state import State, StatesGroup
 
 
+class RegistrationState(StatesGroup):
+    waiting_full_name = State()  # Ism va familiyani kiritish
+    waiting_phone = State()      # Telefon raqamini ulashish yoki kiritish
+
+
 class TransactionState(StatesGroup):
     waiting_input = State()  # Kirim yoki Chiqim tanlangandan so'ng kiritiladigan xabar
     amount = State()         # Summa

@@ -36,6 +36,15 @@ async def handle_voice_message(message: Message, state: FSMContext):
     user_id = message.from_user.id
     user_lang = (await db.get_user_language(user_id)) or "uz"
 
+    if not await db.is_user_registered(user_id):
+        msg = (
+            "⚠️ <b>Iltimos, avval ro'yxatdan o'ting!</b>\n\n/start buyrug'ini bosing va shaxsiy hisobingizni yarating."
+            if user_lang != "ru" else
+            "⚠️ <b>Пожалуйста, сначала зарегистрируйтесь!</b>\n\nОтправьте команду /start для создания аккаунта."
+        )
+        await message.answer(msg, parse_mode="HTML")
+        return
+
     # Jarayon ketayotganini bildirish
     processing_msg = await message.answer(
         t("voice_processing", user_lang), parse_mode="HTML"

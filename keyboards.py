@@ -60,6 +60,21 @@ def get_main_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
     )
 
 
+# 2.1 Telefon raqamni ulashish klaviaturasi
+def get_phone_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
+    """Telefon raqamni ulashish klaviaturasi (Contact tugmasi va Bekor qilish)"""
+    contact_text = "📱 Telefon raqamni ulashish" if lang != "ru" else "📱 Поделиться контактом"
+    cancel_text = "❌ Bekor qilish" if lang != "ru" else "❌ Отмена"
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=contact_text, request_contact=True)],
+            [KeyboardButton(text=cancel_text)]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+
 # 3. Bekor qilish reply tugmasi
 def get_cancel_reply_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(

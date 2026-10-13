@@ -30,10 +30,20 @@ router = Router()
 async def start_income(message: Message, state: FSMContext):
     """Kirim / Доход tugmasi bosilganda (har qanday holatda darhol ishlaydi)"""
     await state.clear()
+    user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
+
+    if not await db.is_user_registered(message.from_user.id):
+        msg = (
+            "⚠️ <b>Iltimos, avval ro'yxatdan o'ting!</b>\n\n/start buyrug'ini bosing va shaxsiy hisobingizni yarating."
+            if user_lang != "ru" else
+            "⚠️ <b>Пожалуйста, сначала зарегистрируйтесь!</b>\n\nОтправьте команду /start для создания аккаунта."
+        )
+        await message.answer(msg, parse_mode="HTML")
+        return
+
     await state.update_data(tr_type="income")
     await state.set_state(TransactionState.waiting_input)
 
-    user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
     await message.answer(
         t("income_prompt", user_lang),
         reply_markup=get_main_keyboard(user_lang),
@@ -45,10 +55,20 @@ async def start_income(message: Message, state: FSMContext):
 async def start_expense(message: Message, state: FSMContext):
     """Chiqim / Расход tugmasi bosilganda (har qanday holatda darhol ishlaydi)"""
     await state.clear()
+    user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
+
+    if not await db.is_user_registered(message.from_user.id):
+        msg = (
+            "⚠️ <b>Iltimos, avval ro'yxatdan o'ting!</b>\n\n/start buyrug'ini bosing va shaxsiy hisobingizni yarating."
+            if user_lang != "ru" else
+            "⚠️ <b>Пожалуйста, сначала зарегистрируйтесь!</b>\n\nОтправьте команду /start для создания аккаунта."
+        )
+        await message.answer(msg, parse_mode="HTML")
+        return
+
     await state.update_data(tr_type="expense")
     await state.set_state(TransactionState.waiting_input)
 
-    user_lang = (await db.get_user_language(message.from_user.id)) or "uz"
     await message.answer(
         t("expense_prompt", user_lang),
         reply_markup=get_main_keyboard(user_lang),
